@@ -1,0 +1,23 @@
+# better-sqlite3 使用自带 N-API prebuild，无需 node-gyp 重编译（本机无 VS Build Tools）
+npmRebuild: false
+buildDependenciesFromSource: false
+
+appId: "local.novel.editor"
+productName: "NovelEditor"
+directories:
+  output: "../artifacts/release"
+  buildResources: "build"
+files:
+  - dist/electron/**/*
+  - dist/renderer/**/*
+  - package.json
+asar: true
+asarUnpack:
+  - "node_modules/better-sqlite3/**"  # 原生 .node 不能从 asar 内加载
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
