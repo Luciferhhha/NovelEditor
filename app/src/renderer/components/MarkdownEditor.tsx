@@ -4,7 +4,7 @@ import {
   EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars,
   Decoration, type DecorationSet, WidgetType,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -19,6 +19,8 @@ export interface MarkdownEditorHandle {
   focusAt: (srcOffset: number) => void;
   getScrollRatio: () => number;
   setScrollRatio: (r: number) => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 const setRanges = StateEffect.define<SrcRange[]>();
@@ -190,6 +192,18 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       const el = view.scrollDOM;
       const max = el.scrollHeight - el.clientHeight;
       el.scrollTop = Math.max(0, Math.min(1, r)) * max;
+    },
+    undo() {
+      const view = viewRef.current;
+      if (!view) return;
+      undo(view);
+      view.focus();
+    },
+    redo() {
+      const view = viewRef.current;
+      if (!view) return;
+      redo(view);
+      view.focus();
     },
   }));
 

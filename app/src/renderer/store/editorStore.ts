@@ -43,7 +43,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  setContent: (content) => set({ content, dirty: true }),
+  setContent: (content) => set(state => ({
+    content,
+    // 与章节原文一致（如切章时编辑器回填）不算修改，避免打开即"未保存"的假脏标记
+    dirty: state.chapter ? content !== state.chapter.contentMd : state.dirty,
+  })),
 
   save: async (bookId, title) => {
     const { chapterId, content, version, dirty } = get();

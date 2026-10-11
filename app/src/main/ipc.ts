@@ -120,7 +120,24 @@ export function registerIpc(): void {
   handle('check:cancel', (req) => { checker.cancel(req.bookId); });
   handle('check:results', (req) => {
     const db = bookService.getDb(req.bookId);
-    return { hits: checkRepo.getHits(db.conn, req.bookId), flags: checkRepo.getFlags(db.conn) };
+    const hits = checkRepo.getHits(db.conn, req.bookId);
+    // 附加命中区间原文，报告面板直接展示"重复内容是：…"
+    const textCache = new Map<string, string>();
+    const chapterText = (id: string): string => {
+      let t = textCache.get(id);
+      if (t === undefined) {
+        const row = db.conn.prepare('SELECT content_text FROM chapters WHERE id = ?').get(id) as { content_text?: string } | undefined;
+        t = row?.content_text ?? '';
+        textCache.set(id, t);
+      }
+      return t;
+    };
+    const withText = hits.map(h => ({
+      ...h,
+      textA: chapterText(h.chapterA).slice(h.startA, h.endA),
+      textB: chapterText(h.chapterB).slice(h.startB, h.endB),
+    }));
+    return { hits: withText, flags: checkRepo.getFlags(db.conn) };
   });
   handle('check:params', (req) => checkRepo.getParams(bookService.getDb(req.bookId).conn));
   handle('check:setParams', (req) => { checkRepo.setParams(bookService.getDb(req.bookId).conn, req.params); });

@@ -62,21 +62,18 @@ export default function ReportPanel({
         {visible.map(h => {
           const isA = h.chapterA === currentChapterId;
           const side: 'a' | 'b' = isA ? 'a' : 'b';
-          const selfId = isA ? h.chapterA : h.chapterB;
-          const otherId = isA ? h.chapterB : h.chapterA;
-          const selfStart = isA ? h.startA : h.startB;
-          const selfEnd = isA ? h.endA : h.endB;
-          const otherStart = isA ? h.startB : h.startA;
-          const otherEnd = isA ? h.endB : h.endA;
+          const titleA = titleOf(h.chapterA);
+          const titleB = titleOf(h.chapterB);
+          const isBad = h.kind === 'exact' || h.similarity >= 1;
           const pct = Math.round(h.similarity * 100);
+          const excerpt = (h.textA || h.textB || '').trim();
+          const chars = h.textA ? h.textA.length : h.endA - h.startA;
           return (
             <div key={h.id} className={'hit-item' + (h.ignored ? ' ignored' : '')}>
               <div className="row">
-                <Spaceless>
-                  {h.kind === 'exact' || h.similarity >= 1
-                    ? <Tag color="red">完全重复 {selfEnd - selfStart}字</Tag>
-                    : <Tag color="orange">近似 {pct}%</Tag>}
-                </Spaceless>
+                <span className="pair-title">
+                  {titleA} <span className="vs">和</span> {titleB} 内容重复
+                </span>
                 <Popconfirm
                   title={h.ignored ? '恢复此命中？' : '忽略此命中？'}
                   onConfirm={() => onToggleIgnore(h)}
@@ -84,19 +81,30 @@ export default function ReportPanel({
                   <Button size="small" type="text" icon={h.ignored ? <EyeOutlined /> : <EyeInvisibleOutlined />} />
                 </Popconfirm>
               </div>
-              <Typography.Text
-                style={{ fontSize: 12, display: 'block', marginTop: 4, cursor: 'pointer' }}
+              <div style={{ marginTop: 4 }}>
+                <Spaceless>
+                  {isBad
+                    ? <Tag color="red">完全重复 {chars} 字</Tag>
+                    : <Tag color="orange">近似重复 {pct}%</Tag>}
+                  {h.ignored && <Tag>已忽略</Tag>}
+                </Spaceless>
+              </div>
+              <div className="repeat-label">重复内容是：</div>
+              <div
+                className={'repeat-excerpt' + (isBad ? ' bad' : '')}
+                title="点击定位到本章命中位置"
                 onClick={() => onJump(h, side)}
               >
-                📍 {titleOf(selfId)} · {selfStart}–{selfEnd}
-                <AimOutlined style={{ marginLeft: 4 }} />
-              </Typography.Text>
-              <Typography.Text
-                style={{ fontSize: 12, display: 'block', color: '#6b7280', cursor: 'pointer', marginTop: 2 }}
-                onClick={() => onJump(h, side === 'a' ? 'b' : 'a')}
-              >
-                ↔ {titleOf(otherId)} · {otherStart}–{otherEnd}
-              </Typography.Text>
+                {excerpt || `（原文区间 ${isA ? h.startA : h.startB}–${isA ? h.endA : h.endB}）`}
+              </div>
+              <div className="hit-actions">
+                <Button size="small" className="loc" onClick={() => onJump(h, 'a')}>
+                  📍 {titleA} · {h.startA}–{h.endA}
+                </Button>
+                <Button size="small" className="loc" onClick={() => onJump(h, 'b')}>
+                  ↔ {titleB} · {h.startB}–{h.endB}
+                </Button>
+              </div>
             </div>
           );
         })}

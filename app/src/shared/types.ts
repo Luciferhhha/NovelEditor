@@ -86,6 +86,9 @@ export interface CheckHit {
   ignored: boolean;
   /** 内容签名，忽略状态跨次查重继承用 */
   sig: string;
+  /** 命中区间在章节 content_text 中的原文（读取结果时附加，供报告展示） */
+  textA?: string;
+  textB?: string;
 }
 
 export interface CheckProgress {

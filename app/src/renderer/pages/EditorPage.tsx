@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, App, Popconfirm, Spin, Tooltip, Typography } from 'antd';
+import { Button, App, Spin, Tooltip, Typography } from 'antd';
 import {
   BoldOutlined, ItalicOutlined, FontSizeOutlined, OrderedListOutlined, UnorderedListOutlined,
   MutedOutlined, LinkOutlined, PictureOutlined, MinusCircleOutlined, UndoOutlined, RedoOutlined,
@@ -38,6 +38,38 @@ export default function EditorPage({ bookId, onExit }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [scrollTo, setScrollTo] = useState<{ from: number; token: number } | null>(null);
+
+  // ---------- 面板宽度（拖拽调整，localStorage 持久化） ----------
+  const [sizes, setSizes] = useState<LayoutSizes>(() => loadLayout());
+  useEffect(() => { saveLayout(sizes); }, [sizes]);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  /** 通用横向拖拽：按下后监听 mousemove，松开清理 */
+  const startResize = (onMove: (e: MouseEvent) => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const move = (ev: MouseEvent) => onMove(ev);
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    document.body.style.userSelect = 'none';
+  };
+  const resizeOutline = startResize(e => {
+    setSizes(v => ({ ...v, outline: clamp(e.clientX - 3, 160, 480) }));
+  });
+  const resizeReport = startResize(e => {
+    setSizes(v => ({ ...v, report: clamp(document.documentElement.clientWidth - e.clientX - 3, 300, 660) }));
+  });
+  const resizeSplit = startResize(e => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    setSizes(v => ({ ...v, split: clamp(pct, 15, 85) }));
+  });
 
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const previewRef = useRef<PreviewHandle | null>(null);
@@ -223,7 +255,10 @@ export default function EditorPage({ bookId, onExit }: Props) {
         reportVisible={check.reportVisible}
       />
 
-      <div className="editor-layout">
+      <div
+        className="editor-layout"
+        style={{ '--outline-w': sizes.outline + 'px', '--report-w': sizes.report + 'px' } as React.CSSProperties}
+      >
         <OutlinePanel
           bookId={bookId}
           volumes={volumes}
@@ -231,6 +266,22 @@ export default function EditorPage({ bookId, onExit }: Props) {
           currentChapterId={currentChapterId}
           onSelectChapter={id => void selectChapter(id)}
           onChanged={() => void refreshSnapshot()}
+        />
+        <div
+          className="panel-resizer"
+          title="拖动调整大纲宽度，双击复位；聚焦后 ←/→ 每次 16px"
+          role="separator"
+          aria-label="调整大纲宽度"
+          tabIndex={0}
+          onMouseDown={resizeOutline}
+          onDoubleClick={() => setSizes(v => ({ ...v, outline: 260 }))}
+          onKeyDown={e => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
+              setSizes(v => ({ ...v, outline: clamp(v.outline + d, 160, 480) }));
+            } else if (e.key === 'Home') setSizes(v => ({ ...v, outline: 260 }));
+          }}
         />
 
         <div className="center-pane">
@@ -247,26 +298,29 @@ export default function EditorPage({ bookId, onExit }: Props) {
             <Tooltip title="图片"><Button size="small" type="text" icon={<PictureOutlined />} onClick={() => wrapSel('![', '](img.png)')} /></Tooltip>
             <Tooltip title="分隔线"><Button size="small" type="text" icon={<MinusCircleOutlined />} onClick={() => insertLine('\n---\n')} /></Tooltip>
             <span className="sep" />
-            <Tooltip title="撤销"><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => document.execCommand?.('undo')} /></Tooltip>
-            <Tooltip title="重做"><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => document.execCommand?.('redo')} /></Tooltip>
+            <Tooltip title="撤销"><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => editorRef.current?.undo()} /></Tooltip>
+            <Tooltip title="重做"><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => editorRef.current?.redo()} /></Tooltip>
             <span style={{ flex: 1 }} />
             {chapter && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {chapter.title} · {chapter.wordCount} 字
                 {chapter.flag && (
-                  <Popconfirm title="该章存在重复内容，清除标记？" onConfirm={() => {}}>
-                    <span style={{ marginLeft: 8, color: chapter.flag.level === 'bad' ? '#dc2626' : '#d97706' }}>
+                  <Tooltip title="本章存在重复内容，点击「报告」查看详情">
+                    <span style={{ marginLeft: 8, cursor: 'pointer', color: chapter.flag.level === 'bad' ? '#dc2626' : '#d97706' }}>
                       {chapter.flag.level === 'bad' ? '⚠ 重复' : '⚠ 疑似'}
                     </span>
-                  </Popconfirm>
+                  </Tooltip>
                 )}
               </Typography.Text>
             )}
           </div>
 
-          <div className="editor-body">
+          <div className="editor-body" ref={bodyRef}>
             {showEditor && (
-              <div className="editor-pane" style={{ flex: splitMode === 'split' ? 1 : undefined, width: splitMode === 'split' ? undefined : '100%' }}>
+              <div
+                className="editor-pane"
+                style={splitMode === 'split' ? { flex: `${sizes.split} 1 0%` } : { flex: 'none', width: '100%' }}
+              >
                 <MarkdownEditor
                   ref={editorRef}
                   value={ed.content}
@@ -277,9 +331,20 @@ export default function EditorPage({ bookId, onExit }: Props) {
                 />
               </div>
             )}
-            {splitMode === 'split' && <div className="split-divider" />}
+            {splitMode === 'split' && (
+              <div
+                className="split-divider"
+                title="拖动调整编辑/预览宽度，双击五五开"
+                onMouseDown={resizeSplit}
+                onDoubleClick={() => setSizes(v => ({ ...v, split: 50 }))}
+              />
+            )}
             {showPreview && (
-              <div style={{ flex: splitMode === 'split' ? 1 : undefined, width: splitMode === 'split' ? undefined : '100%', display: 'flex', minHeight: 0 }}>
+              <div
+                style={splitMode === 'split'
+                  ? { flex: `${100 - sizes.split} 1 0%`, display: 'flex', minHeight: 0 }
+                  : { flex: 'none', width: '100%', display: 'flex', minHeight: 0 }}
+              >
                 <PreviewPane ref={previewRef} content={ed.content} onScroll={previewScroll} />
               </div>
             )}
@@ -299,6 +364,24 @@ export default function EditorPage({ bookId, onExit }: Props) {
           </div>
         </div>
 
+        {check.reportVisible && (
+          <div
+            className="panel-resizer"
+            title="拖动调整报告宽度，双击复位"
+            role="separator"
+            aria-label="调整报告宽度"
+            tabIndex={0}
+            onMouseDown={resizeReport}
+            onDoubleClick={() => setSizes(v => ({ ...v, report: 360 }))}
+            onKeyDown={e => {
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const d = (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 48 : 16);
+                setSizes(v => ({ ...v, report: clamp(v.report + d, 300, 660) }));
+              } else if (e.key === 'Home') setSizes(v => ({ ...v, report: 360 }));
+            }}
+          />
+        )}
         {check.reportVisible && (
           <ReportPanel
             running={check.running}
@@ -349,6 +432,29 @@ export default function EditorPage({ bookId, onExit }: Props) {
       />
     </div>
   );
+}
+
+// ---------- 布局尺寸：读写 localStorage ----------
+interface LayoutSizes { outline: number; report: number; split: number }
+const LAYOUT_KEY = 'novelEditor.layout.v1';
+const DEFAULT_LAYOUT: LayoutSizes = { outline: 260, report: 360, split: 50 };
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+function loadLayout(): LayoutSizes {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    if (raw) {
+      const o = JSON.parse(raw) as Partial<LayoutSizes>;
+      return {
+        outline: typeof o.outline === 'number' ? clamp(o.outline, 160, 480) : DEFAULT_LAYOUT.outline,
+        report: typeof o.report === 'number' ? clamp(o.report, 300, 660) : DEFAULT_LAYOUT.report,
+        split: typeof o.split === 'number' ? clamp(o.split, 15, 85) : DEFAULT_LAYOUT.split,
+      };
+    }
+  } catch { /* 忽略损坏数据 */ }
+  return { ...DEFAULT_LAYOUT };
+}
+function saveLayout(v: LayoutSizes) {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(v)); } catch { /* 存储不可用时忽略 */ }
 }
 
 // 独立导入避免循环依赖提示

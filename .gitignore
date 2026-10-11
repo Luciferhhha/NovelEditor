@@ -17,3 +17,4 @@ data-*/
 .DS_Store
 Thumbs.db
 *.log
+artifacts/*.png
