@@ -3,6 +3,7 @@ import { Button, App, Spin, Tooltip, Typography } from 'antd';
 import {
   BoldOutlined, ItalicOutlined, FontSizeOutlined, OrderedListOutlined, UnorderedListOutlined,
   MutedOutlined, LinkOutlined, PictureOutlined, MinusCircleOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import TopBar, { type SplitMode } from '../components/TopBar';
 import OutlinePanel from '../components/OutlinePanel';
@@ -69,9 +70,75 @@ export default function EditorPage({ bookId, onExit }: Props) {
     const el = bodyRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    const pct = sizes.splitDir === 'v'
+      ? ((e.clientY - rect.top) / rect.height) * 100
+      : ((e.clientX - rect.left) / rect.width) * 100;
     setSizes(v => ({ ...v, split: clamp(pct, 15, 85) }));
   });
+
+  /** 对角拖柄：同时调整面板宽与高（起点取手柄当前几何，位置即状态） */
+  const startCorner = (side: 'outline' | 'report') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const grip = e.currentTarget as HTMLElement;
+    const parent = grip.offsetParent as HTMLElement | null;
+    if (!parent) return;
+    const parentH = parent.offsetHeight;
+    const startW = side === 'outline'
+      ? grip.offsetLeft + 16
+      : parent.offsetWidth - grip.offsetLeft + 16;
+    const startH = grip.offsetTop + 16;
+    if (parentH <= 0 || startW <= 0 || startH <= 0) return;
+    const ratio = startW / startH; // 等比锁定的宽高比
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const move = (ev: MouseEvent) => {
+      const dx = ev.clientX - x0;
+      const dy = ev.clientY - y0;
+      let w = side === 'outline' ? startW + dx : startW - dx;
+      let h = startH + dy;
+      if (ev.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) h = w / ratio;
+        else w = h * ratio;
+      }
+      const wMin = side === 'outline' ? 160 : 300;
+      const wMax = side === 'outline' ? 480 : 660;
+      w = clamp(w, wMin, wMax);
+      const pct = clamp((h / parentH) * 100, 25, 100);
+      if (side === 'outline') setSizes(v => ({ ...v, outline: Math.round(w), outlineH: Math.round(pct) }));
+      else setSizes(v => ({ ...v, report: Math.round(w), reportH: Math.round(pct) }));
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    document.body.style.userSelect = 'none';
+  };
+
+  /** 角柄键盘调节：↑↓ 调高（Shift 大步），←→ 调宽，Home 复位 */
+  const cornerKey = (side: 'outline' | 'report') => (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const d = (e.key === 'ArrowDown' ? 1 : -1) * (e.shiftKey ? 12 : 4);
+      if (side === 'outline') setSizes(v => ({ ...v, outlineH: clamp(v.outlineH + d, 25, 100) }));
+      else setSizes(v => ({ ...v, reportH: clamp(v.reportH + d, 25, 100) }));
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const step = e.shiftKey ? 48 : 16;
+      if (side === 'outline') {
+        const d = (e.key === 'ArrowRight' ? 1 : -1) * step;
+        setSizes(v => ({ ...v, outline: clamp(v.outline + d, 160, 480) }));
+      } else {
+        const d = (e.key === 'ArrowLeft' ? 1 : -1) * step;
+        setSizes(v => ({ ...v, report: clamp(v.report + d, 300, 660) }));
+      }
+    } else if (e.key === 'Home') {
+      if (side === 'outline') setSizes(v => ({ ...v, outline: 260, outlineH: 100 }));
+      else setSizes(v => ({ ...v, report: 360, reportH: 100 }));
+    }
+  };
 
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const previewRef = useRef<PreviewHandle | null>(null);
@@ -297,7 +364,12 @@ export default function EditorPage({ bookId, onExit }: Props) {
 
       <div
         className="editor-layout"
-        style={{ '--outline-w': sizes.outline + 'px', '--report-w': sizes.report + 'px' } as React.CSSProperties}
+        style={{
+          '--outline-w': sizes.outline + 'px',
+          '--report-w': sizes.report + 'px',
+          '--outline-h': sizes.outlineH + '%',
+          '--report-h': sizes.reportH + '%',
+        } as React.CSSProperties}
       >
         <OutlinePanel
           bookId={bookId}
@@ -341,6 +413,16 @@ export default function EditorPage({ bookId, onExit }: Props) {
             <Tooltip title={t('ed.ttUndo')}><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => editorRef.current?.undo()} /></Tooltip>
             <Tooltip title={t('ed.ttRedo')}><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => editorRef.current?.redo()} /></Tooltip>
             <Tooltip title={t('ed.ttStepBack')}><Button size="small" type="text" icon={<ArrowLeftOutlined />} onClick={() => void stepBack()} /></Tooltip>
+            {splitMode === 'split' && (
+              <Tooltip title={t('ed.ttDir')}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<SwapOutlined />}
+                  onClick={() => setSizes(v => ({ ...v, splitDir: v.splitDir === 'h' ? 'v' : 'h' }))}
+                />
+              </Tooltip>
+            )}
             <span style={{ flex: 1 }} />
             {chapter && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -356,7 +438,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
             )}
           </div>
 
-          <div className="editor-body" ref={bodyRef}>
+          <div className={'editor-body' + (splitMode === 'split' && sizes.splitDir === 'v' ? ' split-v' : '')} ref={bodyRef}>
             {showEditor && (
               <div
                 className="editor-pane"
@@ -375,7 +457,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
             {splitMode === 'split' && (
               <div
                 className="split-divider"
-                title={t('ed.rzSplit')}
+                title={sizes.splitDir === 'v' ? t('ed.rzSplitV') : t('ed.rzSplit')}
                 onMouseDown={resizeSplit}
                 onDoubleClick={() => setSizes(v => ({ ...v, split: 50 }))}
               />
@@ -437,6 +519,29 @@ export default function EditorPage({ bookId, onExit }: Props) {
             onToggleIgnore={hit => void toggleIgnore(hit)}
           />
         )}
+        {/* 对角拖柄：拖动同时调整面板宽与高（Shift 等比，双击复位） */}
+        <div
+          className="corner-grip outline-grip"
+          title={t('ed.rzCorner')}
+          role="separator"
+          aria-label={t('ed.rzCornerAria')}
+          tabIndex={0}
+          onMouseDown={startCorner('outline')}
+          onDoubleClick={() => setSizes(v => ({ ...v, outline: 260, outlineH: 100 }))}
+          onKeyDown={cornerKey('outline')}
+        />
+        {check.reportVisible && (
+          <div
+            className="corner-grip report-grip"
+            title={t('ed.rzCorner')}
+            role="separator"
+            aria-label={t('ed.rzCornerAria')}
+            tabIndex={0}
+            onMouseDown={startCorner('report')}
+            onDoubleClick={() => setSizes(v => ({ ...v, report: 360, reportH: 100 }))}
+            onKeyDown={cornerKey('report')}
+          />
+        )}
       </div>
 
       <SearchModal
@@ -476,9 +581,13 @@ export default function EditorPage({ bookId, onExit }: Props) {
 }
 
 // ---------- 布局尺寸：读写 localStorage ----------
-interface LayoutSizes { outline: number; report: number; split: number }
+interface LayoutSizes {
+  outline: number; report: number; split: number;
+  outlineH: number; reportH: number; // 面板高度（占编辑区的百分比，25~100）
+  splitDir: 'h' | 'v';               // 分屏方向：左右 / 上下
+}
 const LAYOUT_KEY = 'novelEditor.layout.v1';
-const DEFAULT_LAYOUT: LayoutSizes = { outline: 260, report: 360, split: 50 };
+const DEFAULT_LAYOUT: LayoutSizes = { outline: 260, report: 360, split: 50, outlineH: 100, reportH: 100, splitDir: 'h' };
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 function loadLayout(): LayoutSizes {
   try {
@@ -489,6 +598,9 @@ function loadLayout(): LayoutSizes {
         outline: typeof o.outline === 'number' ? clamp(o.outline, 160, 480) : DEFAULT_LAYOUT.outline,
         report: typeof o.report === 'number' ? clamp(o.report, 300, 660) : DEFAULT_LAYOUT.report,
         split: typeof o.split === 'number' ? clamp(o.split, 15, 85) : DEFAULT_LAYOUT.split,
+        outlineH: typeof o.outlineH === 'number' ? clamp(o.outlineH, 25, 100) : DEFAULT_LAYOUT.outlineH,
+        reportH: typeof o.reportH === 'number' ? clamp(o.reportH, 25, 100) : DEFAULT_LAYOUT.reportH,
+        splitDir: o.splitDir === 'v' ? 'v' : 'h',
       };
     }
   } catch { /* 忽略损坏数据 */ }

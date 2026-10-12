@@ -24,8 +24,8 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
   border-bottom: 1px solid #e5e7eb; background: #fff; }
 
 /* ---------- 编辑器页 ---------- */
-.editor-layout { flex: 1; display: flex; min-height: 0; --outline-w: 260px; --report-w: 360px; }
-.outline-panel { width: var(--outline-w, 260px); border-right: 0; background: #fafafa; display: flex; flex-direction: column; min-height: 0; }
+.editor-layout { flex: 1; display: flex; min-height: 0; position: relative; --outline-w: 260px; --report-w: 360px; }
+.outline-panel { width: var(--outline-w, 260px); height: var(--outline-h, 100%); border-right: 0; background: #fafafa; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .outline-panel .head { padding: 10px 12px; font-weight: 600; font-size: 13px; color: #374151;
   display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
 .outline-tree { flex: 1; overflow: auto; padding: 6px; }
@@ -52,7 +52,8 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 .markdown-body blockquote { border-left: 3px solid #d1d5db; margin: .8em 0; padding: 2px 14px; color: #6b7280; }
 .markdown-body code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: .92em; }
 .markdown-body pre { background: #f8f8f8; padding: 12px 14px; border-radius: 8px; overflow: auto; }
-.markdown-body img { max-width: 100%; }
+.markdown-body img { display: block; max-width: 100%; margin: 14px auto; border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.12); }
 .markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.6em 0; }
 .markdown-body table { border-collapse: collapse; }
 .markdown-body th, .markdown-body td { border: 1px solid #e5e7eb; padding: 6px 10px; }
@@ -61,7 +62,7 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 .hit-mark.bad { background: #ffd0d0; border-bottom-color: #ef4444; }
 
 /* ---------- 报告面板 ---------- */
-.report-panel { width: var(--report-w, 360px); border-left: 1px solid #e5e7eb; background: #fff; display: flex; flex-direction: column; min-height: 0; }
+.report-panel { width: var(--report-w, 360px); height: var(--report-h, 100%); border-left: 1px solid #e5e7eb; background: #fff; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .report-panel .head { padding: 10px 14px; border-bottom: 1px solid #eee; font-weight: 600;
   display: flex; justify-content: space-between; align-items: center; }
 .report-list { flex: 1; overflow: auto; padding: 10px; }
@@ -132,3 +133,54 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 [data-theme='dark'] .cm-editor .cm-activeLine { background: #24242455; }
 [data-theme='dark'] .cm-editor .cm-activeLineGutter { background: #24242455; }
 [data-theme='dark'] .cm-editor .cm-selectionBackground, [data-theme='dark'] .cm-editor ::selection { background: #264f78 !important; }
+
+/* ---------- 上下分屏（splitDir='v'） ---------- */
+.editor-body.split-v { flex-direction: column; }
+.editor-body.split-v .split-divider { width: auto; height: 5px; cursor: row-resize;
+  border-left: none; border-right: none; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; }
+.editor-body.split-v .preview-pane { border-left: none; border-top: 1px solid #e5e7eb; }
+.editor-body.split-v .editor-pane, .editor-body.split-v > div { min-height: 0; }
+
+/* ---------- 对角拖柄（同时调整面板宽与高，Shift 等比） ---------- */
+.corner-grip { position: absolute; width: 18px; height: 18px; z-index: 5; padding: 0;
+  background: transparent; transition: background .12s; }
+.corner-grip::after { content: ''; position: absolute; width: 9px; height: 9px; }
+.corner-grip:hover, .corner-grip.dragging, .corner-grip:focus-visible { background: rgba(207,224,247,.75); outline: none; }
+/* 大纲面板右下角（向右下拖：加宽+加高） */
+.corner-grip.outline-grip { left: calc(var(--outline-w, 260px) - 16px); top: calc(var(--outline-h, 100%) - 16px); cursor: nwse-resize; }
+.corner-grip.outline-grip::after { right: 3px; bottom: 3px; border-right: 2px solid #b9c2cf; border-bottom: 2px solid #b9c2cf; }
+.corner-grip.outline-grip:hover::after, .corner-grip.outline-grip.dragging::after { border-color: #4a6fa5; }
+/* 报告面板左下角（向左拖：加宽；向下拖：加高） */
+.corner-grip.report-grip { right: calc(var(--report-w, 360px) - 16px); top: calc(var(--report-h, 100%) - 16px); cursor: nesw-resize; }
+.corner-grip.report-grip::after { left: 3px; bottom: 3px; border-left: 2px solid #b9c2cf; border-bottom: 2px solid #b9c2cf; }
+.corner-grip.report-grip:hover::after, .corner-grip.report-grip.dragging::after { border-color: #4a6fa5; }
+
+/* ---------- 背景选择浮层（TopBar） ---------- */
+.bg-pop { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 300px; }
+.bg-swatch { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(0,0,0,.18);
+  cursor: pointer; padding: 0; transition: transform .12s; }
+.bg-swatch:hover { transform: scale(1.12); }
+.bg-swatch.active { outline: 2px solid #4a6fa5; outline-offset: 2px; }
+[data-theme='dark'] .bg-swatch { border-color: rgba(255,255,255,.25); }
+
+/* ---------- 阅读背景（html[data-reader]，由 bgStore 写 CSS 变量） ----------
+   放在深色段之后：阅读区始终保持浅底+深色文字，与全局深色主题解耦 */
+html[data-reader] .editor-pane,
+html[data-reader] .preview-pane {
+  background-color: var(--reader-bg-color, #fff);
+  background-image: var(--reader-wash, none), var(--reader-bg-image, none);
+  background-size: 100% 100%, var(--reader-bg-size, auto);
+  background-position: top left, top center;
+  background-repeat: no-repeat, var(--reader-bg-repeat, no-repeat);
+}
+html[data-reader] .cm-editor,
+html[data-reader] .cm-editor .cm-gutters,
+html[data-reader] .cm-editor .cm-activeLine,
+html[data-reader] .cm-editor .cm-activeLineGutter { background: transparent !important; }
+html[data-reader] .cm-editor, html[data-reader] .cm-editor .cm-content { color: #1f2937 !important; }
+html[data-reader] .cm-editor .cm-gutters { color: #9aa4b2 !important; border-right-color: rgba(0,0,0,.08) !important; }
+html[data-reader] .cm-editor .cm-cursor { border-left-color: #1f2937 !important; }
+html[data-reader] .markdown-body { color: #1f2937; }
+html[data-reader] .markdown-body blockquote { color: #5b6472; border-left-color: rgba(0,0,0,.2); }
+html[data-reader] .markdown-body code { background: rgba(0,0,0,.06); }
+html[data-reader] .preview-pane { border-left-color: rgba(0,0,0,.12); }

@@ -14,10 +14,14 @@ export function preprocessForPreview(md: string): string {
         return line;
       }
       if (inFence) return line;
-      const m = /^( +)(.*)$/.exec(line);
-      if (!m) return line;
+      // 归一化图片/链接："] (" → "]("（markdown 不认中间带空格的写法，会整段按纯文本渲染）
+      const fixed = line
+        .replace(/(!\[[^\]\n]*\])\s+\(/g, '$1(')
+        .replace(/(\[[^\]\n]*\])\s+\(/g, '$1(');
+      const m = /^( +)(.*)$/.exec(fixed);
+      if (!m) return fixed;
       // 块级结构保留原样（嵌套列表依赖缩进）
-      if (/^\s*([-*+]\s|#|>\s?|\d+[.)]\s|\|)/.test(line)) return line;
+      if (/^\s*([-*+]\s|#|>\s?|\d+[.)]\s|\|)/.test(fixed)) return fixed;
       const n = Math.min(m[1].length, 12);
       return '&nbsp;'.repeat(n) + m[2];
     })

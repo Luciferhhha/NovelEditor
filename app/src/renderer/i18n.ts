@@ -210,6 +210,25 @@ export const zh = {
   'set.nearThreshold': '近似重复相似度阈值',
   'set.flagBadRatio': '标记为「重」的重复占比',
   'set.flagWarnRatio': '标记为「疑」的重复占比',
+
+  // ---- 阅读背景 ----
+  'top.bg': '背景',
+  'top.bgTip': '设置写作/阅读背景（内置单色与自定义图片）',
+  'top.bgDefault': '默认',
+  'top.bgEye': '护眼绿',
+  'top.bgRice': '米黄',
+  'top.bgParchment': '羊皮纸',
+  'top.bgGray': '浅灰',
+  'top.bgCustom': '自定义图片…',
+  'top.bgReset': '恢复默认',
+
+  // ---- 第二轮反馈 ----
+  'lib.todayOpen': '今天打开',
+  'lib.yesterdayOpen': '昨天打开',
+  'ed.ttDir': '切换分屏方向（左右 / 上下）',
+  'ed.rzCorner': '拖动同时调整宽与高（Shift 等比锁定，双击复位）',
+  'ed.rzCornerAria': '调整面板宽高',
+  'ed.rzSplitV': '拖动调整编辑/预览高度，双击五五开',
 } as const;
 
 export type TKey = keyof typeof zh;
@@ -389,6 +408,23 @@ export const en: Record<TKey, string> = {
   'set.nearThreshold': 'Near-duplicate similarity threshold',
   'set.flagBadRatio': 'Ratio to flag as DUP',
   'set.flagWarnRatio': 'Ratio to flag as SIM',
+
+  'top.bg': 'Background',
+  'top.bgTip': 'Set writing/reading background (built-in colors or your own image)',
+  'top.bgDefault': 'Default',
+  'top.bgEye': 'Eye-care green',
+  'top.bgRice': 'Rice yellow',
+  'top.bgParchment': 'Parchment',
+  'top.bgGray': 'Light gray',
+  'top.bgCustom': 'Custom image…',
+  'top.bgReset': 'Reset',
+
+  'lib.todayOpen': 'opened today',
+  'lib.yesterdayOpen': 'opened yesterday',
+  'ed.ttDir': 'Switch split direction (side by side / stacked)',
+  'ed.rzCorner': 'Drag to resize width & height (Shift locks ratio, double-click resets)',
+  'ed.rzCornerAria': 'Resize panel width and height',
+  'ed.rzSplitV': 'Drag to resize editor/preview height, double-click for 50/50',
 };
 
 export function translate(locale: Locale, key: TKey, vars?: Record<string, string | number>): string {

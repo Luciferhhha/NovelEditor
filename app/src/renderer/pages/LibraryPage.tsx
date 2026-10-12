@@ -10,6 +10,19 @@ interface Props {
   onOpen: (id: string) => void;
 }
 
+/** 自然日差：0=今天 1=昨天 …（修正原先 Math.max(1,…) 永远至少 1 天的问题） */
+function daysSince(ts: number): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(ts); day.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - day.getTime()) / 86400000);
+}
+function openLabel(ts: number, t: ReturnType<typeof useT>): string {
+  const d = daysSince(ts);
+  if (d <= 0) return t('lib.todayOpen');
+  if (d === 1) return t('lib.yesterdayOpen');
+  return t('lib.daysAgo', { n: d });
+}
+
 interface Stats { chapterCount: number; volumeCount: number; wordTotal: number; }
 
 export default function LibraryPage({ onOpen }: Props) {
@@ -123,10 +136,10 @@ export default function LibraryPage({ onOpen }: Props) {
                 <span>{st ? (locale === 'zh'
                       ? t('lib.unitWan', { n: (st.wordTotal / 10000).toFixed(1) })
                       : t('lib.unitK', { n: (st.wordTotal / 1000).toFixed(1) })) : '—'}</span>
-                <span><FieldTimeOutlined /> {new Date(entry.updatedAt).toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US')}</span>
+                <span><FieldTimeOutlined /> {new Date(entry.lastOpenedAt || entry.updatedAt).toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US')}</span>
               </div>
               {entry.lastOpenedAt > 0 && <Tag style={{ position: 'absolute', right: 12, bottom: 12 }} color="blue">
-                {t('lib.daysAgo', { n: Math.max(1, Math.round((Date.now() - entry.lastOpenedAt) / 86400000)) })}
+                {openLabel(entry.lastOpenedAt, t)}
               </Tag>}
             </div>
           );
