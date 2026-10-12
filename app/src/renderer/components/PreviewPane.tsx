@@ -1,10 +1,11 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import MarkdownIt from 'markdown-it';
+import { preprocessForPreview } from '../../shared/markdown/previewRules';
 
 const md = new MarkdownIt({
   html: true,
   linkify: true,
-  breaks: false,
+  breaks: true,
 });
 
 export interface PreviewHandle {
@@ -18,7 +19,7 @@ interface Props {
 
 const PreviewPane = forwardRef<PreviewHandle, Props>(function PreviewPane({ content, onScroll }, ref) {
   const refBox = useRef<HTMLDivElement | null>(null);
-  const html = md.render(content);
+  const html = md.render(preprocessForPreview(content));
 
   const onScrollRef = useRef(onScroll);
   onScrollRef.current = onScroll;

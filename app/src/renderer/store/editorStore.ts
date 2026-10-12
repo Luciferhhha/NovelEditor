@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { api, type Chapter, type ChapterMeta } from '../api';
 import { extractOutline, type OutlineItem } from '../../shared/markdown/outline';
 
+/** 回退快照：某次保存前的章节内容（会话级，关闭软件即清空） */
+export interface StepSnapshot { bookId: string; chapterId: string; content: string; }
+
 interface EditorState {
   chapterId: string | null;
   chapter: Chapter | null;
@@ -17,8 +20,13 @@ interface EditorState {
   save: (bookId: string, title?: string) => Promise<'ok' | 'conflict' | 'noop'>;
   resolveConflictOverwrite: (bookId: string) => Promise<void>;
   resolveConflictDiscard: (bookId: string) => Promise<void>;
-  /** 清空编辑器状态（返回书架时调用） */
+  /** 清空编辑器状态（返回书架时调用；不清 history——回退范围是整个会话） */
   reset: () => void;
+  /** 会话级回退栈（保存前快照，最多 200 条） */
+  history: StepSnapshot[];
+  popHistory: () => StepSnapshot | null;
+  /** 回退保存时置 true，抑制该次保存入栈 */
+  suppressPush: boolean;
   setHighlightRanges: (ranges: [number, number][]) => void;
   applyChapterMeta: (meta: ChapterMeta) => void;
 }
@@ -32,6 +40,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saving: false,
   conflict: false,
   highlightRanges: [],
+  history: [],
+  suppressPush: false,
 
   reset: () => set({ chapterId: null, chapter: null, content: '', version: 0, dirty: false, saving: false, conflict: false, highlightRanges: [] }),
 
@@ -53,9 +63,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { chapterId, content, version, dirty } = get();
     if (!chapterId || !dirty) return 'noop';
     set({ saving: true });
+    const before = get().chapter?.contentMd;
     try {
       const res = await api.saveChapter(bookId, chapterId, content, version, title);
       set({ version: res.version, dirty: false, conflict: false });
+      // 入栈：保存前的内容（仅在内容实际变化且非回退保存时）
+      if (get().suppressPush) {
+        set({ suppressPush: false });
+      } else if (before !== undefined && before !== content) {
+        const h = [...get().history, { bookId, chapterId, content: before }];
+        set({ history: h.length > 200 ? h.slice(-200) : h });
+      }
       const chapter = get().chapter;
       if (chapter) set({ chapter: { ...chapter, updatedAt: res.updatedAt, version: res.version } });
       return 'ok';
@@ -89,6 +107,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { chapterId } = get();
     if (!chapterId) return;
     await get().loadChapter(bookId, chapterId);
+  },
+
+  popHistory: () => {
+    const h = get().history;
+    if (h.length === 0) return null;
+    const snap = h[h.length - 1];
+    set({ history: h.slice(0, -1) });
+    return snap;
   },
 
   setHighlightRanges: (ranges) => set({ highlightRanges: ranges }),

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Dropdown, Empty, Input, Modal, Spin, Tag, message } from 'antd';
+import { Button, Dropdown, Empty, Input, Modal, Spin, Tag, Tooltip, message } from 'antd';
 import { PlusOutlined, MoreOutlined, BookOutlined, FileTextOutlined, FieldTimeOutlined } from '@ant-design/icons';
 import { useBookStore } from '../store/bookStore';
 import { api, type LibraryEntry } from '../api';
 import { useThemeStore } from '../store/themeStore';
+import { useT, useLocale } from '../i18n';
 
 interface Props {
   onOpen: (id: string) => void;
@@ -12,6 +13,9 @@ interface Props {
 interface Stats { chapterCount: number; volumeCount: number; wordTotal: number; }
 
 export default function LibraryPage({ onOpen }: Props) {
+  const t = useT();
+  const locale = useLocale(s => s.locale);
+  const setLocale = useLocale(s => s.setLocale);
   const { library, loadLibrary, createBook, deleteBook } = useBookStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -45,22 +49,22 @@ export default function LibraryPage({ onOpen }: Props) {
   }, [library.length]);
 
   const submitCreate = async () => {
-    if (!title.trim()) { message.warning('请输入书名'); return; }
+    if (!title.trim()) { message.warning(t('lib.errNoTitle')); return; }
     setBusy(true);
     try {
-      await createBook(title.trim(), author.trim() || '佚名', desc.trim());
+      await createBook(title.trim(), author.trim() || t('lib.anon'), desc.trim());
       setCreateOpen(false);
       setTitle(''); setAuthor(''); setDesc('');
-      message.success('已创建');
+      message.success(t('lib.created'));
     } finally { setBusy(false); }
   };
 
   const handleDelete = (entry: LibraryEntry) => {
     Modal.confirm({
-      title: `删除《${entry.title}》？`,
-      content: '书籍的全部章节与备份将从磁盘删除，此操作不可撤销。',
+      title: t('lib.deleteTitle', { title: entry.title }),
+      content: t('lib.deleteContent'),
       okButtonProps: { danger: true },
-      onOk: async () => { await deleteBook(entry.id); message.success('已删除'); },
+      onOk: async () => { await deleteBook(entry.id); message.success(t('lib.deleted')); },
     });
   };
 
@@ -71,17 +75,18 @@ export default function LibraryPage({ onOpen }: Props) {
   return (
     <div className="library-page">
       <div className="library-header">
-        <h1>📚 NovelEditor <span style={{ fontSize: 14, color: '#9ca3af', fontWeight: 400 }}>本地小说写作工作台</span></h1>
+        <h1>📚 NovelEditor <span style={{ fontSize: 14, color: '#9ca3af', fontWeight: 400 }}>{t('lib.tagline')}</span></h1>
         <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-          <Button onClick={toggleTheme}>{themeMode === 'dark' ? '☀️ 浅色' : '🌙 深色'}</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建书籍</Button>
+          <Tooltip title={locale === 'zh' ? t('top.lang') : t('top.langBack')}><Button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}>{t('lib.lang')}</Button></Tooltip>
+          <Button onClick={toggleTheme}>{themeMode === 'dark' ? t('lib.themeLight') : t('lib.themeDark')}</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('lib.newBook')}</Button>
         </span>
       </div>
 
       {loading && <Spin />}
       {!loading && sorted.length === 0 && (
-        <Empty description="还没有书，点击「新建书籍」开始写作">
-          <Button type="primary" onClick={() => setCreateOpen(true)}>新建书籍</Button>
+        <Empty description={t('lib.empty')}>
+          <Button type="primary" onClick={() => setCreateOpen(true)}>{t('lib.newBook')}</Button>
         </Empty>
       )}
 
@@ -99,8 +104,8 @@ export default function LibraryPage({ onOpen }: Props) {
                   trigger={['click']}
                   menu={{
                     items: [
-                      { key: 'open', label: '打开' },
-                      { key: 'delete', label: '删除', danger: true },
+                      { key: 'open', label: t('common.open') },
+                      { key: 'delete', label: t('common.delete'), danger: true },
                     ],
                     onClick: ({ key, domEvent }) => {
                       domEvent.stopPropagation();
@@ -114,12 +119,14 @@ export default function LibraryPage({ onOpen }: Props) {
               </div>
               {entry.description && <div className="desc">{entry.description}</div>}
               <div className="meta">
-                <span><FileTextOutlined /> {st ? st.chapterCount : '—'} 章</span>
-                <span>{st ? (st.wordTotal / 10000).toFixed(1) + ' 万字' : '—'}</span>
-                <span><FieldTimeOutlined /> {new Date(entry.updatedAt).toLocaleDateString('zh-CN')}</span>
+                <span><FileTextOutlined /> {st ? t('lib.unitChapters', { n: st.chapterCount }) : '—'}</span>
+                <span>{st ? (locale === 'zh'
+                      ? t('lib.unitWan', { n: (st.wordTotal / 10000).toFixed(1) })
+                      : t('lib.unitK', { n: (st.wordTotal / 1000).toFixed(1) })) : '—'}</span>
+                <span><FieldTimeOutlined /> {new Date(entry.updatedAt).toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US')}</span>
               </div>
               {entry.lastOpenedAt > 0 && <Tag style={{ position: 'absolute', right: 12, bottom: 12 }} color="blue">
-                {Math.max(1, Math.round((Date.now() - entry.lastOpenedAt) / 86400000))} 天前打开
+                {t('lib.daysAgo', { n: Math.max(1, Math.round((Date.now() - entry.lastOpenedAt) / 86400000)) })}
               </Tag>}
             </div>
           );
@@ -128,16 +135,16 @@ export default function LibraryPage({ onOpen }: Props) {
 
       <Modal
         open={createOpen}
-        title="新建书籍"
+        title={t('lib.newBook')}
         onOk={submitCreate}
         onCancel={() => setCreateOpen(false)}
         confirmLoading={busy}
         width={440}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Input placeholder="书名（必填）" value={title} onChange={e => setTitle(e.target.value)} onPressEnter={submitCreate} autoFocus />
-          <Input placeholder="作者（默认：佚名）" value={author} onChange={e => setAuthor(e.target.value)} />
-          <Input.TextArea placeholder="简介（可选）" rows={3} value={desc} onChange={e => setDesc(e.target.value)} />
+          <Input placeholder={t('lib.titlePh')} value={title} onChange={e => setTitle(e.target.value)} onPressEnter={submitCreate} autoFocus />
+          <Input placeholder={t('lib.authorPh')} value={author} onChange={e => setAuthor(e.target.value)} />
+          <Input.TextArea placeholder={t('lib.descPh')} rows={3} value={desc} onChange={e => setDesc(e.target.value)} />
         </div>
       </Modal>
     </div>

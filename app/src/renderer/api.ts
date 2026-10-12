@@ -66,6 +66,7 @@ export const api = {
   restoreBackup: (bookId: string, name: string) => call('backup:restore', { bookId, name }),
 
   selectDirectory: (): Promise<string | null> => call('dialog:selectDirectory'),
+  selectImage: (): Promise<{ canceled: boolean; filePath: string | null }> => call('dialog:selectImage'),
   on: <C extends EventChannel>(channel: C, cb: (payload: IpcEventMap[C]) => void) => {
     if (!raw) return () => {};
     return raw.on(channel, cb as (payload: unknown) => void);

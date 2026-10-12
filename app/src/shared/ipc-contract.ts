@@ -39,6 +39,7 @@ export interface IpcInvokeMap {
   'backup:restore': { req: { bookId: string; name: string }; res: void };
 
   'dialog:selectDirectory': { req: void; res: string | null };
+  'dialog:selectImage': { req: void; res: { canceled: boolean; filePath: string | null } };
 }
 
 export interface BookSnapshot {
@@ -64,7 +65,7 @@ export const INVOKE_CHANNELS = [
   'check:run', 'check:cancel', 'check:results', 'check:params', 'check:setParams', 'check:ignore',
   'search:run', 'export:run',
   'backup:create', 'backup:list', 'backup:restore',
-  'dialog:selectDirectory',
+  'dialog:selectDirectory', 'dialog:selectImage',
 ] as const;
 
 export const EVENT_CHANNELS = ['check:progress', 'check:done', 'check:error', 'book:changed'] as const;

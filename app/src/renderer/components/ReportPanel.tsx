@@ -3,6 +3,7 @@ import { Button, Empty, Spin, Tag, Popconfirm, Typography, Progress, Alert, Swit
 import { CloseOutlined, AimOutlined, EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons';
 import type { CheckHit, ChapterMeta } from '../api';
 import { countWords } from '../../shared/wordCount';
+import { useT } from '../i18n';
 
 interface Props {
   running: boolean;
@@ -20,10 +21,11 @@ interface Props {
 export default function ReportPanel({
   running, hits, chapters, currentChapterId, error, showIgnored, onShowIgnored, onClose, onJump, onToggleIgnore,
 }: Props) {
+  const t = useT();
   const titleOf = useMemo(() => {
     const m = new Map(chapters.map(ch => [ch.id, ch]));
-    return (id: string) => m.get(id)?.title ?? '(已删除章节)';
-  }, [chapters]);
+    return (id: string) => m.get(id)?.title ?? t('rep.deletedChapter');
+  }, [chapters, t]);
 
   const visible = hits.filter(h => showIgnored || !h.ignored);
   const active = visible.filter(h => !h.ignored);
@@ -32,17 +34,17 @@ export default function ReportPanel({
   return (
     <div className="report-panel">
       <div className="head">
-        <span>查重报告</span>
+        <span>{t('rep.title')}</span>
         <Spaceless>
-          <Switch size="small" checked={showIgnored} onChange={onShowIgnored} checkedChildren="忽略项" unCheckedChildren="忽略项" />
+          <Switch size="small" checked={showIgnored} onChange={onShowIgnored} checkedChildren={t('rep.ignoredSwitch')} unCheckedChildren={t('rep.ignoredSwitch')} />
           <Button size="small" type="text" icon={<CloseOutlined />} onClick={onClose} />
         </Spaceless>
       </div>
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
         <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#6b7280', alignItems: 'center' }}>
-          <span>命中 <b style={{ color: '#111' }}>{active.length}</b></span>
-          <span>完全重复 <b style={{ color: '#dc2626' }}>{badCount}</b></span>
-          <span>忽略 <b>{hits.filter(h => h.ignored).length}</b></span>
+          <span>{t('rep.hits')} <b style={{ color: '#111' }}>{active.length}</b></span>
+          <span>{t('rep.bad')} <b style={{ color: '#dc2626' }}>{badCount}</b></span>
+          <span>{t('rep.ignored')} <b>{hits.filter(h => h.ignored).length}</b></span>
         </div>
         {active.length > 0 && (
           <Progress
@@ -55,10 +57,10 @@ export default function ReportPanel({
         )}
       </div>
       <div className="report-list">
-        {error && <Alert type="error" showIcon message="查重失败" description={error} style={{ marginBottom: 10 }} />}
+        {error && <Alert type="error" showIcon message={t('rep.fail')} description={error} style={{ marginBottom: 10 }} />}
         {running && <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>}
         {!running && visible.length === 0 && (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={hits.length === 0 ? '暂无查重结果，点击「查重」开始' : '结果已全部忽略'} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={hits.length === 0 ? t('rep.empty') : t('rep.allIgnored')} />
         )}
         {visible.map(h => {
           const isA = h.chapterA === currentChapterId;
@@ -75,10 +77,10 @@ export default function ReportPanel({
             <div key={h.id} className={'hit-item' + (h.ignored ? ' ignored' : '')}>
               <div className="row">
                 <span className="pair-title">
-                  {titleA} <span className="vs">和</span> {titleB} 内容重复
+                  {titleA} <span className="vs">{t('rep.and')}</span> {titleB} {t('rep.pair')}
                 </span>
                 <Popconfirm
-                  title={h.ignored ? '恢复此命中？' : '忽略此命中？'}
+                  title={h.ignored ? t('rep.restoreHit') : t('rep.ignoreHit')}
                   onConfirm={() => onToggleIgnore(h)}
                 >
                   <Button size="small" type="text" icon={h.ignored ? <EyeOutlined /> : <EyeInvisibleOutlined />} />
@@ -87,27 +89,27 @@ export default function ReportPanel({
               <div style={{ marginTop: 4 }}>
                 <Spaceless>
                   {isBad
-                    ? <Tag color="red">完全重复 {chars} 字</Tag>
-                    : <Tag color="orange">近似重复 {pct}%</Tag>}
-                  {h.ignored && <Tag>已忽略</Tag>}
+                    ? <Tag color="red">{t('rep.badChars', { n: chars })}</Tag>
+                    : <Tag color="orange">{t('rep.nearPct', { pct })}</Tag>}
+                  {h.ignored && <Tag>{t('rep.ignoredTag')}</Tag>}
                 </Spaceless>
               </div>
-              <div className="repeat-label">{isBad ? '重复内容是：' : '近似内容对比（两章各自原文）：'}</div>
+              <div className="repeat-label">{isBad ? t('rep.repeatIs') : t('rep.nearCompare')}</div>
               {isBad ? (
                 <div
                   className="repeat-excerpt bad"
-                  title="点击定位到本章命中位置"
+                  title={t('rep.jumpHere')}
                   onClick={() => onJump(h, side)}
                 >
-                  {excerptA || excerptB || `（原文区间 ${isA ? h.startA : h.startB}–${isA ? h.endA : h.endB}）`}
+                  {excerptA || excerptB || `${t('rep.origRange', { a: isA ? h.startA : h.startB, b: isA ? h.endA : h.endB })}`}
                 </div>
               ) : (
                 <>
-                  <div className="repeat-excerpt side-a" title="点击定位到本章命中位置" onClick={() => onJump(h, 'a')}>
-                    <b className="side-tag">{titleA}</b>{excerptA || '（无文本）'}
+                  <div className="repeat-excerpt side-a" title={t('rep.jumpHere')} onClick={() => onJump(h, 'a')}>
+                    <b className="side-tag">{titleA}</b>{excerptA || t('rep.noText')}
                   </div>
-                  <div className="repeat-excerpt side-b" title="点击定位到对方章节" onClick={() => onJump(h, 'b')}>
-                    <b className="side-tag">{titleB}</b>{excerptB || '（无文本）'}
+                  <div className="repeat-excerpt side-b" title={t('rep.jumpOther')} onClick={() => onJump(h, 'b')}>
+                    <b className="side-tag">{titleB}</b>{excerptB || t('rep.noText')}
                   </div>
                 </>
               )}

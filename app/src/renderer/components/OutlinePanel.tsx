@@ -4,6 +4,8 @@ import { PlusOutlined, MoreOutlined, BookOutlined, FileTextOutlined } from '@ant
 import type { DataNode } from 'antd/es/tree';
 import type { Volume, ChapterMeta, ChapterFlagInfo } from '../api';
 import { api } from '../api';
+import { useT } from '../i18n';
+type TFunc = ReturnType<typeof useT>;
 
 interface Props {
   bookId: string;
@@ -14,13 +16,15 @@ interface Props {
   onChanged: () => void;
 }
 
-function flagTag(flag: ChapterFlagInfo | null): React.ReactNode {
+function flagTag(flag: ChapterFlagInfo | null, t: TFunc): React.ReactNode {
   if (!flag) return null;
-  if (flag.level === 'bad') return <Tooltip title={`重复率 ${(flag.dupRatio * 100).toFixed(1)}% · ${flag.dupCount} 处`}><Tag color="red" className="chapter-flag">重</Tag></Tooltip>;
-  return <Tooltip title={`重复率 ${(flag.dupRatio * 100).toFixed(1)}% · ${flag.dupCount} 处`}><Tag color="orange" className="chapter-flag">疑</Tag></Tooltip>;
+  const tip = t('out.flagTip', { ratio: (flag.dupRatio * 100).toFixed(1), count: flag.dupCount });
+  if (flag.level === 'bad') return <Tooltip title={tip}><Tag color="red" className="chapter-flag">{t('out.tagDup')}</Tag></Tooltip>;
+  return <Tooltip title={tip}><Tag color="orange" className="chapter-flag">{t('out.tagSuspect')}</Tag></Tooltip>;
 }
 
 export default function OutlinePanel({ bookId, volumes, chapters, currentChapterId, onSelectChapter, onChanged }: Props) {
+  const t = useT();
   const [modal, setModal] = useState<null | { kind: 'volume' | 'chapter'; volumeId?: string; editingVolumeId?: string; editingChapterId?: string; initial?: string }>(null);
   const [text, setText] = useState('');
 
@@ -34,17 +38,17 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
           trigger={['click']}
           menu={{
             items: [
-              { key: 'add', label: '新建章节' },
-              { key: 'rename', label: '重命名卷' },
-              { key: 'delete', label: '删除卷', danger: true },
+              { key: 'add', label: t('out.addChapter') },
+              { key: 'rename', label: t('out.renameVolume') },
+              { key: 'delete', label: t('out.deleteVolume'), danger: true },
             ],
             onClick: ({ key }) => {
-              if (key === 'add') { setText('新章节'); setModal({ kind: 'chapter', volumeId: v.id }); }
+              if (key === 'add') { setText(t('out.newChapter')); setModal({ kind: 'chapter', volumeId: v.id }); }
               if (key === 'rename') { setText(v.title); setModal({ kind: 'volume', editingVolumeId: v.id }); }
               if (key === 'delete') {
                 Modal.confirm({
-                  title: `删除卷《${v.title}》？`,
-                  content: '卷内所有章节将一并删除，此操作不可撤销。',
+                  title: t('out.delVolumeTitle', { title: v.title }),
+                  content: t('out.delVolumeContent'),
                   okButtonProps: { danger: true },
                   onOk: async () => { await api.deleteVolume(bookId, v.id); onChanged(); },
                 });
@@ -62,20 +66,20 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
         <span className="outline-item-title">
           <FileTextOutlined style={{ color: ch.id === currentChapterId ? '#4a6fa5' : '#9ca3af' }} />
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: ch.id === currentChapterId ? 600 : 400 }}>{ch.title}</span>
-          {flagTag(ch.flag)}
+          {flagTag(ch.flag, t)}
           <Dropdown
             trigger={['click']}
             menu={{
               items: [
-                { key: 'rename', label: '重命名' },
-                { key: 'delete', label: '删除章节', danger: true },
+                { key: 'rename', label: t('out.rename') },
+                { key: 'delete', label: t('out.deleteChapter'), danger: true },
               ],
               onClick: ({ key }) => {
                 if (key === 'rename') { setText(ch.title); setModal({ kind: 'chapter', editingChapterId: ch.id }); }
                 if (key === 'delete') {
                   Modal.confirm({
-                    title: `删除章节《${ch.title}》？`,
-                    content: '删除后可通过备份恢复。',
+                    title: t('out.delChapterTitle', { title: ch.title }),
+                    content: t('out.delChapterContent'),
                     okButtonProps: { danger: true },
                     onOk: async () => { await api.deleteChapter(bookId, ch.id); onChanged(); },
                   });
@@ -88,7 +92,7 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
         </span>
       ),
     })),
-  })), [volumes, chapters, currentChapterId, bookId]);
+  })), [volumes, chapters, currentChapterId, bookId, t]);
 
   /** 拖拽排序：章节可拖到任意卷的任意位置（卷本身不可拖） */
   const onDrop = async (info: { dragNode?: DataNode; node: DataNode; dropPosition: number }) => {
@@ -145,15 +149,15 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
   return (
     <div className="outline-panel">
       <div className="head">
-        <span>大纲</span>
+        <span>{t('out.title')}</span>
         <span>
-          <Button size="small" type="text" icon={<PlusOutlined />} title="新建卷"
-            onClick={() => { setText('新卷'); setModal({ kind: 'volume' }); }} />
+          <Button size="small" type="text" icon={<PlusOutlined />} title={t('out.addVolume')}
+            onClick={() => { setText(t('out.newVolume')); setModal({ kind: 'volume' }); }} />
         </span>
       </div>
       <div className="outline-tree">
         {nodes.length === 0
-          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无卷/章" />
+          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('out.empty')} />
           : (
             <Tree
               treeData={nodes}
@@ -170,12 +174,12 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
       </div>
       <Modal
         open={!!modal}
-        title={modal?.editingVolumeId || modal?.editingChapterId ? '重命名' : modal?.kind === 'volume' ? '新建卷' : '新建章节'}
+        title={modal?.editingVolumeId || modal?.editingChapterId ? t('out.rename') : modal?.kind === 'volume' ? t('out.newVolume') : t('out.addChapter')}
         onOk={submit}
         onCancel={() => setModal(null)}
         width={380}
       >
-        <Input value={text} onChange={e => setText(e.target.value)} onPressEnter={submit} autoFocus placeholder="输入名称" />
+        <Input value={text} onChange={e => setText(e.target.value)} onPressEnter={submit} autoFocus placeholder={t('out.inputName')} />
       </Modal>
     </div>
   );

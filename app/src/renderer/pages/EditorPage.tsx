@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, App, Spin, Tooltip, Typography } from 'antd';
 import {
   BoldOutlined, ItalicOutlined, FontSizeOutlined, OrderedListOutlined, UnorderedListOutlined,
-  MutedOutlined, LinkOutlined, PictureOutlined, MinusCircleOutlined, UndoOutlined, RedoOutlined,
+  MutedOutlined, LinkOutlined, PictureOutlined, MinusCircleOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined,
 } from '@ant-design/icons';
 import TopBar, { type SplitMode } from '../components/TopBar';
 import OutlinePanel from '../components/OutlinePanel';
@@ -18,6 +18,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useCheckStore, mergeRanges } from '../store/checkStore';
 import { textRangeToSrc } from '../../shared/markdown/offsetMap';
 import type { CheckHit, ExportFormat, ExportScope } from '../api';
+import { useT } from '../i18n';
 
 interface Props {
   bookId: string;
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function EditorPage({ bookId, onExit }: Props) {
+  const t = useT();
   const { message, modal } = App.useApp();
   const snapshot = useBookStore(s => s.snapshot);
   const refreshSnapshot = useBookStore(s => s.refreshSnapshot);
@@ -101,10 +103,10 @@ export default function EditorPage({ bookId, onExit }: Props) {
     savingRef.current = true;
     try {
       const res = await ed.save(bookId);
-      if (res === 'ok' && !silent) message.success('已保存');
+      if (res === 'ok' && !silent) message.success(t('ed.saved'));
       return res === 'ok';
     } catch (e) {
-      if (!silent) message.error('保存失败：' + (e instanceof Error ? e.message : String(e)));
+      if (!silent) message.error(t('ed.saveFail') + (e instanceof Error ? e.message : String(e)));
       return false;
     } finally {
       savingRef.current = false;
@@ -138,10 +140,10 @@ export default function EditorPage({ bookId, onExit }: Props) {
   useEffect(() => {
     if (!ed.conflict) return;
     modal.confirm({
-      title: '章节已被其他位置修改',
-      content: '本地内容与磁盘上的最新版本不一致（乐观锁冲突）。选择处理方式：',
-      okText: '用本地内容覆盖',
-      cancelText: '放弃本地，加载最新',
+      title: t('ed.conflictTitle'),
+      content: t('ed.conflictContent'),
+      okText: t('ed.conflictOverwrite'),
+      cancelText: t('ed.conflictDiscard'),
       closable: false,
       maskClosable: false,
       onOk: () => ed.resolveConflictOverwrite(bookId),
@@ -210,9 +212,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
     try {
       setReportVisibleSafe(true);
       await check.run(bookId, full, full ? undefined : ed.chapterId ?? undefined);
-      message.success('查重完成');
+      message.success(t('ed.checkDone'));
     } catch (e) {
-      message.error('查重失败：' + (e instanceof Error ? e.message : String(e)));
+      message.error(t('ed.checkFail') + (e instanceof Error ? e.message : String(e)));
     }
   };
   const setReportVisibleSafe = (v: boolean) => check.setReportVisible(v);
@@ -220,6 +222,44 @@ export default function EditorPage({ bookId, onExit }: Props) {
   // ---------- 工具栏 ----------
   const wrapSel = (before: string, after: string) => editorRef.current?.wrapSelection(before, after);
   const insertLine = (prefix: string) => editorRef.current?.insertText(prefix);
+  const insertImage = async () => {
+    try {
+      const res = await fullApi.selectImage();
+      if (res.canceled || !res.filePath) return;
+      // file:/// + encodeURI：保留 / : 编码空格与中文
+      const url = 'file:///' + encodeURI(res.filePath.replace(/\\/g, '/'));
+      const base = (res.filePath.split(/[\\/]/).pop() || 'image').replace(/\.[^.]+$/, '');
+      editorRef.current?.insertText(`![${base}](${url})`);
+    } catch {
+      message.error(t('ed.imgFail'));
+    }
+  };
+
+  /** 一键回退：恢复到上一次保存前的内容（回退栈随本次启动存在，关闭即清空） */
+  const stepBack = async () => {
+    // 先冲刷未保存编辑，保证栈顶是“上一步”
+    await doSave(true);
+    const snap = useEditorStore.getState().popHistory();
+    if (!snap) {
+      message.info(t('ed.noUndo'));
+      return;
+    }
+    if (snap.bookId !== bookId) {
+      message.warning(t('ed.undoOtherBook'));
+      return;
+    }
+    try {
+      if (snap.chapterId !== useEditorStore.getState().chapterId) {
+        await selectChapter(snap.chapterId);
+      }
+      useEditorStore.setState({ suppressPush: true });
+      ed.setContent(snap.content);
+      await doSave(true);
+      message.success(t('ed.undoDone'));
+    } catch (e) {
+      message.error(t('ed.undoFail') + (e instanceof Error ? e.message : String(e)));
+    }
+  };
 
   const toggleIgnore = async (hit: CheckHit) => {
     await check.toggleIgnore(bookId, hit);
@@ -269,9 +309,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
         />
         <div
           className="panel-resizer"
-          title="拖动调整大纲宽度，双击复位；聚焦后 ←/→ 每次 16px"
+          title={t('ed.rzOutline')}
           role="separator"
-          aria-label="调整大纲宽度"
+          aria-label={t('ed.rzOutlineAria')}
           tabIndex={0}
           onMouseDown={resizeOutline}
           onDoubleClick={() => setSizes(v => ({ ...v, outline: 260 }))}
@@ -286,28 +326,29 @@ export default function EditorPage({ bookId, onExit }: Props) {
 
         <div className="center-pane">
           <div className="editor-toolbar">
-            <Tooltip title="标题"><Button size="small" type="text" icon={<FontSizeOutlined />} onClick={() => insertLine('## ')} /></Tooltip>
-            <Tooltip title="加粗"><Button size="small" type="text" icon={<BoldOutlined />} onClick={() => wrapSel('**', '**')} /></Tooltip>
-            <Tooltip title="斜体"><Button size="small" type="text" icon={<ItalicOutlined />} onClick={() => wrapSel('*', '*')} /></Tooltip>
+            <Tooltip title={t('ed.ttTitle')}><Button size="small" type="text" icon={<FontSizeOutlined />} onClick={() => insertLine('## ')} /></Tooltip>
+            <Tooltip title={t('ed.ttBold')}><Button size="small" type="text" icon={<BoldOutlined />} onClick={() => wrapSel('**', '**')} /></Tooltip>
+            <Tooltip title={t('ed.ttItalic')}><Button size="small" type="text" icon={<ItalicOutlined />} onClick={() => wrapSel('*', '*')} /></Tooltip>
             <span className="sep" />
-            <Tooltip title="引用"><Button size="small" type="text" icon={<MutedOutlined />} onClick={() => insertLine('> ')} /></Tooltip>
-            <Tooltip title="有序列表"><Button size="small" type="text" icon={<OrderedListOutlined />} onClick={() => insertLine('1. ')} /></Tooltip>
-            <Tooltip title="无序列表"><Button size="small" type="text" icon={<UnorderedListOutlined />} onClick={() => insertLine('- ')} /></Tooltip>
+            <Tooltip title={t('ed.ttQuote')}><Button size="small" type="text" icon={<MutedOutlined />} onClick={() => insertLine('> ')} /></Tooltip>
+            <Tooltip title={t('ed.ttOl')}><Button size="small" type="text" icon={<OrderedListOutlined />} onClick={() => insertLine('1. ')} /></Tooltip>
+            <Tooltip title={t('ed.ttUl')}><Button size="small" type="text" icon={<UnorderedListOutlined />} onClick={() => insertLine('- ')} /></Tooltip>
             <span className="sep" />
-            <Tooltip title="链接"><Button size="small" type="text" icon={<LinkOutlined />} onClick={() => wrapSel('[', '](url)')} /></Tooltip>
-            <Tooltip title="图片"><Button size="small" type="text" icon={<PictureOutlined />} onClick={() => wrapSel('![', '](img.png)')} /></Tooltip>
-            <Tooltip title="分隔线"><Button size="small" type="text" icon={<MinusCircleOutlined />} onClick={() => insertLine('\n---\n')} /></Tooltip>
+            <Tooltip title={t('ed.ttLink')}><Button size="small" type="text" icon={<LinkOutlined />} onClick={() => wrapSel('[', '](url)')} /></Tooltip>
+            <Tooltip title={t('ed.ttImage')}><Button size="small" type="text" icon={<PictureOutlined />} onClick={() => void insertImage()} /></Tooltip>
+            <Tooltip title={t('ed.ttHr')}><Button size="small" type="text" icon={<MinusCircleOutlined />} onClick={() => insertLine('\n---\n')} /></Tooltip>
             <span className="sep" />
-            <Tooltip title="撤销"><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => editorRef.current?.undo()} /></Tooltip>
-            <Tooltip title="重做"><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => editorRef.current?.redo()} /></Tooltip>
+            <Tooltip title={t('ed.ttUndo')}><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => editorRef.current?.undo()} /></Tooltip>
+            <Tooltip title={t('ed.ttRedo')}><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => editorRef.current?.redo()} /></Tooltip>
+            <Tooltip title={t('ed.ttStepBack')}><Button size="small" type="text" icon={<ArrowLeftOutlined />} onClick={() => void stepBack()} /></Tooltip>
             <span style={{ flex: 1 }} />
             {chapter && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {chapter.title} · {chapter.wordCount} 字
+                {chapter.title} · {t('ed.chars', { n: chapter.wordCount })}
                 {chapter.flag && (
-                  <Tooltip title="本章存在重复内容，点击「报告」查看详情">
+                  <Tooltip title={t('out.chapterDupTip')}>
                     <span style={{ marginLeft: 8, cursor: 'pointer', color: chapter.flag.level === 'bad' ? '#dc2626' : '#d97706' }}>
-                      {chapter.flag.level === 'bad' ? '⚠ 重复' : '⚠ 疑似'}
+                      {chapter.flag.level === 'bad' ? t('ed.flagDup') : t('ed.flagSuspect')}
                     </span>
                   </Tooltip>
                 )}
@@ -334,7 +375,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
             {splitMode === 'split' && (
               <div
                 className="split-divider"
-                title="拖动调整编辑/预览宽度，双击五五开"
+                title={t('ed.rzSplit')}
                 onMouseDown={resizeSplit}
                 onDoubleClick={() => setSizes(v => ({ ...v, split: 50 }))}
               />
@@ -351,15 +392,15 @@ export default function EditorPage({ bookId, onExit }: Props) {
           </div>
 
           <div className="status-bar">
-            <span>章 {chapters.length}</span>
-            <span>卷 {volumes.length}</span>
-            <span>全书 {(wordTotal / 10000).toFixed(2)} 万字</span>
-            <span>{ed.saving ? '保存中…' : ed.dirty ? '未保存更改' : '已同步'}</span>
+            <span>{t('ed.statChapters', { n: chapters.length })}</span>
+            <span>{t('ed.statVolumes', { n: volumes.length })}</span>
+            <span>{t('ed.statBook', { n: (wordTotal / 10000).toFixed(2) })}</span>
+            <span>{ed.saving ? t('ed.saving') : ed.dirty ? t('ed.unsavedChanges') : t('ed.synced')}</span>
             <span style={{ marginLeft: 'auto' }}>
-              {check.running ? '查重进行中…' : `命中 ${check.hits.filter(h => !h.ignored).length} 处`}
+              {check.running ? t('ed.checkingRun') : t('ed.hitsCount', { n: check.hits.filter(h => !h.ignored).length })}
             </span>
             <Button size="small" type={check.reportVisible ? 'primary' : 'default'} onClick={() => check.setReportVisible(!check.reportVisible)}>
-              报告
+              {t('top.report')}
             </Button>
           </div>
         </div>
@@ -367,9 +408,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
         {check.reportVisible && (
           <div
             className="panel-resizer"
-            title="拖动调整报告宽度，双击复位"
+            title={t('ed.rzReport')}
             role="separator"
-            aria-label="调整报告宽度"
+            aria-label={t('ed.rzReportAria')}
             tabIndex={0}
             onMouseDown={resizeReport}
             onDoubleClick={() => setSizes(v => ({ ...v, report: 360 }))}
@@ -413,7 +454,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
         onRun={async (scope: ExportScope, targetId, format: ExportFormat) => {
           const res = await api_runExport(bookId, scope, targetId, format);
           if (res.canceled) return;
-          message.success('已导出：' + (res.filePath ?? ''));
+          message.success(t('ed.exported') + (res.filePath ?? ''));
         }}
       />
 
@@ -428,7 +469,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
         open={settingsOpen}
         params={check.params}
         onClose={() => setSettingsOpen(false)}
-        onSave={async params => { await check.saveParams(bookId, params); message.success('参数已保存，下次查重生效'); }}
+        onSave={async params => { await check.saveParams(bookId, params); message.success(t('ed.paramsSaved')); }}
       />
     </div>
   );

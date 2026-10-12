@@ -177,6 +177,18 @@ export function registerIpc(): void {
       : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
     return ret.canceled ? null : (ret.filePaths[0] ?? null);
   });
+  handle('dialog:selectImage', async () => {
+    const opts: Electron.OpenDialogOptions = {
+      properties: ['openFile'],
+      filters: [
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg'] },
+        { name: '所有文件', extensions: ['*'] },
+      ],
+    };
+    const win = BrowserWindow.getFocusedWindow();
+    const ret = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return { canceled: ret.canceled, filePath: ret.canceled ? null : (ret.filePaths[0] ?? null) };
+  });
 }
 
 function exportFilters(format: string): { name: string; extensions: string[] }[] {

@@ -3,6 +3,7 @@ import { Modal, Button, List, Popconfirm, Empty, Tag, Typography, Space, message
 import { InboxOutlined, UndoOutlined } from '@ant-design/icons';
 import type { BackupInfo } from '../api';
 import { api } from '../api';
+import { useT, useLocale } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -18,8 +19,10 @@ function fmtSize(n: number): string {
 }
 
 export default function BackupModal({ open, bookId, onClose, onChanged }: Props) {
+  const t = useT();
   const [list, setList] = useState<BackupInfo[]>([]);
   const [busy, setBusy] = useState(false);
+  const locale = useLocale(s => s.locale);
 
   const refresh = async () => setList(await api.listBackups(bookId));
   useEffect(() => { if (open) void refresh(); }, [open, bookId]);
@@ -28,13 +31,13 @@ export default function BackupModal({ open, bookId, onClose, onChanged }: Props)
     setBusy(true);
     try {
       setList(await api.createBackup(bookId));
-      message.success('备份已创建（保留最近 5 份）');
+      message.success(t('bak.created'));
     } finally { setBusy(false); }
   };
 
   const restore = async (name: string) => {
     await api.restoreBackup(bookId, name);
-    message.success('已恢复，正在重新加载…');
+    message.success(t('bak.restored'));
     onChanged();
     onClose();
   };
@@ -42,18 +45,18 @@ export default function BackupModal({ open, bookId, onClose, onChanged }: Props)
   return (
     <Modal
       open={open}
-      title="备份与恢复"
+      title={t('bak.title')}
       onCancel={onClose}
-      footer={<Button onClick={onClose}>关闭</Button>}
+      footer={<Button onClick={onClose}>{t('common.close')}</Button>}
       width={560}
     >
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
-        <Button type="primary" icon={<InboxOutlined />} loading={busy} onClick={create}>立即备份</Button>
+        <Button type="primary" icon={<InboxOutlined />} loading={busy} onClick={create}>{t('bak.now')}</Button>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          备份使用 SQLite VACUUM INTO 生成一致性快照，保存在该书目录的 backup/ 下，自动保留最近 5 份。
+          {t('bak.hint')}
         </Typography.Text>
         {list.length === 0
-          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无备份" />
+          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('bak.none')} />
           : (
             <List
               size="small"
@@ -63,17 +66,17 @@ export default function BackupModal({ open, bookId, onClose, onChanged }: Props)
                   actions={[
                     <Popconfirm
                       key="restore"
-                      title="恢复此备份？"
-                      description="当前书内容将被覆盖（建议先手动备份）。"
+                      title={t('bak.restoreConfirm')}
+                      description={t('bak.restoreDesc')}
                       onConfirm={() => restore(item.name)}
                     >
-                      <Button size="small" icon={<UndoOutlined />}>恢复</Button>
+                      <Button size="small" icon={<UndoOutlined />}>{t('bak.restore')}</Button>
                     </Popconfirm>,
                   ]}
                 >
                   <List.Item.Meta
                     title={<span style={{ fontSize: 13 }}>{item.name} <Tag>{fmtSize(item.size)}</Tag></span>}
-                    description={<span style={{ fontSize: 12 }}>{new Date(item.createdAt).toLocaleString('zh-CN')}</span>}
+                    description={<span style={{ fontSize: 12 }}>{new Date(item.createdAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}</span>}
                   />
                 </List.Item>
               )}

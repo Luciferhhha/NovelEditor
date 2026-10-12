@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Input, List, Tag, Empty, Spin, Typography } from 'antd';
 import type { SearchHit } from '../api';
 import { api } from '../api';
+import { useT } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function SearchModal({ open, bookId, onClose, onJump }: Props) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,23 +27,23 @@ export default function SearchModal({ open, bookId, onClose, onJump }: Props) {
   return (
     <Modal
       open={open}
-      title="全文搜索"
+      title={t('sea.title')}
       onCancel={() => { setHits(null); setQuery(''); onClose(); }}
       footer={null}
       width={640}
     >
       <Input.Search
-        placeholder="输入关键词"
+        placeholder={t('sea.ph')}
         value={query}
         onChange={e => setQuery(e.target.value)}
         onSearch={doSearch}
-        enterButton="搜索"
+        enterButton={t('sea.btn')}
         loading={loading}
         autoFocus
       />
       <div style={{ marginTop: 14, maxHeight: 420, overflow: 'auto' }}>
         {loading && <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>}
-        {!loading && hits && hits.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配结果" />}
+        {!loading && hits && hits.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sea.none')} />}
         {!loading && hits && hits.length > 0 && (
           <List
             size="small"
