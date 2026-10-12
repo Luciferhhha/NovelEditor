@@ -165,14 +165,32 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 
 /* ---------- 阅读背景（html[data-reader]，由 bgStore 写 CSS 变量） ----------
    放在深色段之后：阅读区始终保持浅底+深色文字，与全局深色主题解耦 */
-html[data-reader] .editor-pane,
-html[data-reader] .preview-pane {
+/* 整层背景：一张图铺在整个工作区（大纲+工具栏+编辑+预览+报告）的最底层，
+   各面板一律透明，只透出这张底图——不再分板块各贴一块 */
+html[data-reader] .editor-layout {
+  isolation: isolate; /* 让 z-index:-1 的底图留在本布局的堆叠上下文内 */
+}
+html[data-reader] .editor-layout::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-color: var(--reader-bg-color, #fff);
   background-image: var(--reader-wash, none), var(--reader-bg-image, none);
-  background-size: 100% 100%, var(--reader-bg-size, auto);
-  background-position: top left, top center;
-  background-repeat: no-repeat, var(--reader-bg-repeat, no-repeat);
+  background-size: 100% 100%, var(--reader-bg-size, cover);
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
+/* 面板透明化：让底层背景完整连成一片（含深色主题的覆盖） */
+html[data-reader] .outline-panel,
+html[data-reader] .editor-toolbar,
+html[data-reader] .status-bar,
+html[data-reader] .report-panel,
+html[data-reader] .editor-pane,
+html[data-reader] .preview-pane { background: transparent; }
+html[data-reader] .split-divider { background: rgba(0,0,0,.05); }
+html[data-reader] .outline-panel .head,
+html[data-reader] .report-panel .head { border-bottom-color: rgba(0,0,0,.1); }
+/* 报告卡片保持半透明浅底，保证盖在背景上仍可读 */
+html[data-reader] .hit-item { background: rgba(255,255,255,.85); }
+html[data-reader] .hit-item .repeat-excerpt { background: rgba(255,251,235,.92); }
 html[data-reader] .cm-editor,
 html[data-reader] .cm-editor .cm-gutters,
 html[data-reader] .cm-editor .cm-activeLine,

@@ -66,15 +66,45 @@ export default function EditorPage({ bookId, onExit }: Props) {
   const resizeReport = startResize(e => {
     setSizes(v => ({ ...v, report: clamp(document.documentElement.clientWidth - e.clientX - 3, 300, 660) }));
   });
-  const resizeSplit = startResize(e => {
+  /**
+   * 分屏分隔条：自由二维拖动——按拖动的主导方向自动切换 左右/上下 分屏。
+   * 横拖 = 左右分屏调宽度，竖拖 = 上下分屏调高度，斜拖按先出现的主方向决定。
+   */
+  const resizeSplit = (e: React.MouseEvent) => {
+    e.preventDefault();
     const el = bodyRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pct = sizes.splitDir === 'v'
-      ? ((e.clientY - rect.top) / rect.height) * 100
-      : ((e.clientX - rect.left) / rect.width) * 100;
-    setSizes(v => ({ ...v, split: clamp(pct, 15, 85) }));
-  });
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let dir: 'h' | 'v' = sizes.splitDir;
+    let decided = false;
+    const move = (ev: MouseEvent) => {
+      const dx = Math.abs(ev.clientX - x0);
+      const dy = Math.abs(ev.clientY - y0);
+      if (!decided) {
+        if (dx < 4 && dy < 4) return; // 死区，避免点击误触
+        decided = true;
+      }
+      const want: 'h' | 'v' = dx >= dy ? 'h' : 'v';
+      if (want !== dir) {
+        dir = want;
+        setSizes(v => ({ ...v, splitDir: want }));
+      }
+      const r = el.getBoundingClientRect();
+      const pct = dir === 'v'
+        ? ((ev.clientY - r.top) / r.height) * 100
+        : ((ev.clientX - r.left) / r.width) * 100;
+      setSizes(v => ({ ...v, split: clamp(pct, 15, 85) }));
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    document.body.style.userSelect = 'none';
+  };
 
   /** 对角拖柄：同时调整面板宽与高（起点取手柄当前几何，位置即状态） */
   const startCorner = (side: 'outline' | 'report') => (e: React.MouseEvent) => {
