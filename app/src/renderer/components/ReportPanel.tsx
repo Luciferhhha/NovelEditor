@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Button, Empty, Spin, Tag, Popconfirm, Typography, Progress, Alert, Switch } from 'antd';
 import { CloseOutlined, AimOutlined, EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons';
 import type { CheckHit, ChapterMeta } from '../api';
+import { countWords } from '../../shared/wordCount';
 
 interface Props {
   running: boolean;
@@ -66,8 +67,10 @@ export default function ReportPanel({
           const titleB = titleOf(h.chapterB);
           const isBad = h.kind === 'exact' || h.similarity >= 1;
           const pct = Math.round(h.similarity * 100);
-          const excerpt = (h.textA || h.textB || '').trim();
-          const chars = h.textA ? h.textA.length : h.endA - h.startA;
+          const excerptA = (h.textA || '').trim();
+          const excerptB = (h.textB || '').trim();
+          // 字数口径与状态栏一致：countWords（CJK 逐字 + 拉丁按词，不含空白/标点）
+          const chars = h.textA ? Math.max(1, countWords(h.textA)) : h.endA - h.startA;
           return (
             <div key={h.id} className={'hit-item' + (h.ignored ? ' ignored' : '')}>
               <div className="row">
@@ -89,14 +92,25 @@ export default function ReportPanel({
                   {h.ignored && <Tag>已忽略</Tag>}
                 </Spaceless>
               </div>
-              <div className="repeat-label">重复内容是：</div>
-              <div
-                className={'repeat-excerpt' + (isBad ? ' bad' : '')}
-                title="点击定位到本章命中位置"
-                onClick={() => onJump(h, side)}
-              >
-                {excerpt || `（原文区间 ${isA ? h.startA : h.startB}–${isA ? h.endA : h.endB}）`}
-              </div>
+              <div className="repeat-label">{isBad ? '重复内容是：' : '近似内容对比（两章各自原文）：'}</div>
+              {isBad ? (
+                <div
+                  className="repeat-excerpt bad"
+                  title="点击定位到本章命中位置"
+                  onClick={() => onJump(h, side)}
+                >
+                  {excerptA || excerptB || `（原文区间 ${isA ? h.startA : h.startB}–${isA ? h.endA : h.endB}）`}
+                </div>
+              ) : (
+                <>
+                  <div className="repeat-excerpt side-a" title="点击定位到本章命中位置" onClick={() => onJump(h, 'a')}>
+                    <b className="side-tag">{titleA}</b>{excerptA || '（无文本）'}
+                  </div>
+                  <div className="repeat-excerpt side-b" title="点击定位到对方章节" onClick={() => onJump(h, 'b')}>
+                    <b className="side-tag">{titleB}</b>{excerptB || '（无文本）'}
+                  </div>
+                </>
+              )}
               <div className="hit-actions">
                 <Button size="small" className="loc" onClick={() => onJump(h, 'a')}>
                   📍 {titleA} · {h.startA}–{h.endA}

@@ -3,6 +3,7 @@ import { Button, Dropdown, Empty, Input, Modal, Spin, Tag, message } from 'antd'
 import { PlusOutlined, MoreOutlined, BookOutlined, FileTextOutlined, FieldTimeOutlined } from '@ant-design/icons';
 import { useBookStore } from '../store/bookStore';
 import { api, type LibraryEntry } from '../api';
+import { useThemeStore } from '../store/themeStore';
 
 interface Props {
   onOpen: (id: string) => void;
@@ -63,13 +64,18 @@ export default function LibraryPage({ onOpen }: Props) {
     });
   };
 
+  const themeMode = useThemeStore(st => st.theme);
+  const toggleTheme = useThemeStore(st => st.toggle);
   const sorted = useMemo(() => [...library].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt), [library]);
 
   return (
     <div className="library-page">
       <div className="library-header">
         <h1>📚 NovelEditor <span style={{ fontSize: 14, color: '#9ca3af', fontWeight: 400 }}>本地小说写作工作台</span></h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建书籍</Button>
+        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <Button onClick={toggleTheme}>{themeMode === 'dark' ? '☀️ 浅色' : '🌙 深色'}</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建书籍</Button>
+        </span>
       </div>
 
       {loading && <Spin />}

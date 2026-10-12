@@ -5,6 +5,7 @@ import {
   DownloadOutlined, DatabaseOutlined, SettingOutlined, PartitionOutlined,
 } from '@ant-design/icons';
 import type { CheckProgress } from '../../shared/types';
+import { useThemeStore } from '../store/themeStore';
 
 export type SplitMode = 'split' | 'edit' | 'preview';
 
@@ -28,8 +29,10 @@ interface Props {
 }
 
 export default function TopBar(p: Props) {
+  const themeMode = useThemeStore(s => s.theme);
+  const toggleTheme = useThemeStore(s => s.toggle);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
+    <div className="top-bar">
       <Space size={12}>
         <Button size="small" icon={<ArrowLeftOutlined />} onClick={p.onBack}>书架</Button>
         <b style={{ fontSize: 15 }}>{p.bookTitle}</b>
@@ -61,6 +64,9 @@ export default function TopBar(p: Props) {
         <Button size="small" icon={<DatabaseOutlined />} onClick={p.onBackup}>备份</Button>
         <Button size="small" icon={<SettingOutlined />} onClick={p.onSettings}>查重设置</Button>
         <Button size="small" onClick={p.onToggleReport} type={p.reportVisible ? 'default' : 'dashed'}>报告</Button>
+        <Tooltip title={themeMode === 'dark' ? '切换为浅色模式' : '切换为深色模式'}>
+          <Button size="small" onClick={toggleTheme}>{themeMode === 'dark' ? '☀️' : '🌙'}</Button>
+        </Tooltip>
       </Space>
     </div>
   );

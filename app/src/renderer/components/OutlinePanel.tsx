@@ -90,6 +90,36 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
     })),
   })), [volumes, chapters, currentChapterId, bookId]);
 
+  /** 拖拽排序：章节可拖到任意卷的任意位置（卷本身不可拖） */
+  const onDrop = async (info: { dragNode?: DataNode; node: DataNode; dropPosition: number }) => {
+    const dragKey = String(info.dragNode?.key ?? '');
+    const dropKey = String(info.node.key);
+    if (!dragKey.startsWith('c:')) return; // 仅章可拖
+    const chapterId = dragKey.slice(2);
+    let targetVolumeId: string;
+    let index: number;
+    if (dropKey.startsWith('v:')) {
+      // 拖到卷上 → 追加为该卷末章
+      targetVolumeId = dropKey.slice(2);
+      index = chapters.filter(c => c.volumeId === targetVolumeId).length;
+    } else {
+      const dropCh = chapters.find(c => c.id === dropKey.slice(2));
+      if (!dropCh) return;
+      targetVolumeId = dropCh.volumeId;
+      const list = chapters.filter(c => c.volumeId === targetVolumeId);
+      let idx = list.findIndex(c => c.id === dropCh.id);
+      if (idx < 0) return;
+      if (info.dropPosition !== -1) idx += 1; // 落在目标之后/内部
+      const dragIdx = list.findIndex(c => c.id === chapterId);
+      if (dragIdx >= 0 && dragIdx < idx) idx -= 1; // 同卷前移时坐标系剔除拖动章
+      index = Math.max(0, idx);
+    }
+    try {
+      await api.moveChapter(bookId, chapterId, targetVolumeId, index);
+      onChanged();
+    } catch { /* 忽略：并发修改冲突 */ }
+  };
+
   const submit = async () => {
     if (!modal || !text.trim()) { setModal(null); return; }
     if (modal.kind === 'volume') {
@@ -129,6 +159,8 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
               treeData={nodes}
               selectedKeys={currentChapterId ? ['c:' + currentChapterId] : []}
               defaultExpandAll
+              draggable={{ nodeDraggable: node => String(node.key).startsWith('c:') }}
+              onDrop={onDrop}
               onSelect={keys => {
                 const k = String(keys[0] ?? '');
                 if (k.startsWith('c:')) onSelectChapter(k.slice(2));

@@ -19,6 +19,10 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 .book-card .desc { color: #9ca3af; font-size: 12px; margin-top: 8px; min-height: 32px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* 顶栏（书架返回 + 工具按钮） */
+.top-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px;
+  border-bottom: 1px solid #e5e7eb; background: #fff; }
+
 /* ---------- 编辑器页 ---------- */
 .editor-layout { flex: 1; display: flex; min-height: 0; --outline-w: 260px; --report-w: 360px; }
 .outline-panel { width: var(--outline-w, 260px); border-right: 0; background: #fafafa; display: flex; flex-direction: column; min-height: 0; }
@@ -74,6 +78,12 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
   display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .hit-item .repeat-excerpt.bad { background: #fef2f2; border-left-color: #ef4444; }
 .hit-item .repeat-excerpt:hover { filter: brightness(.98); }
+.hit-item .repeat-excerpt.side-a { background: #fffbeb; border-left-color: #f59e0b; }
+.hit-item .repeat-excerpt.side-b { background: #eff6ff; border-left-color: #3b82f6; }
+.hit-item .repeat-excerpt .side-tag { display: block; margin-bottom: 3px; font-size: 12px; color: #6b7280; font-weight: 500; }
+[data-theme='dark'] .hit-item .repeat-excerpt.side-a { background: #3a3018; border-left-color: #f59e0b; }
+[data-theme='dark'] .hit-item .repeat-excerpt.side-b { background: #1d2b3f; border-left-color: #3b82f6; color: #c9dcf5; }
+[data-theme='dark'] .hit-item .repeat-excerpt .side-tag { color: #9ca3af; }
 .hit-item .hit-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
 .hit-item .hit-actions .loc { font-size: 12px; }
 .chapter-flag { font-size: 11px; padding: 0 6px; border-radius: 999px; }
@@ -83,3 +93,42 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 
 .outline-item-title { display: inline-flex; align-items: center; gap: 6px; width: 100%; }
 .outline-item-title .flag-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* ---------- 深色模式（[data-theme=dark]，由 themeStore 应用到 <html>） ---------- */
+[data-theme='dark'] body { background: #181818; color: #d4d4d4; }
+[data-theme='dark'] .top-bar { background: #232323; border-bottom-color: #3a3a3a; }
+[data-theme='dark'] .library-page { background: #181818; }
+[data-theme='dark'] .library-header h1 { color: #e5e5e5; }
+[data-theme='dark'] .book-card { background: #232323; border-color: #3a3a3a; }
+[data-theme='dark'] .book-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+[data-theme='dark'] .outline-panel { background: #1f1f1f; }
+[data-theme='dark'] .outline-panel .head { color: #cfcfcf; border-bottom-color: #333; }
+[data-theme='dark'] .editor-toolbar { background: #232323; border-bottom-color: #3a3a3a; }
+[data-theme='dark'] .editor-toolbar .sep { background: #3a3a3a; }
+[data-theme='dark'] .preview-pane { background: #1c1c1c; border-left-color: #3a3a3a; }
+[data-theme='dark'] .split-divider { background: #242424; border-color: #3a3a3a; }
+[data-theme='dark'] .split-divider:hover, [data-theme='dark'] .split-divider.dragging { background: #2f4a6e; }
+[data-theme='dark'] .panel-resizer:hover, [data-theme='dark'] .panel-resizer.dragging { background: #2f4a6e; }
+[data-theme='dark'] .report-panel { background: #1f1f1f; border-left-color: #3a3a3a; }
+[data-theme='dark'] .report-panel .head { border-bottom-color: #333; }
+[data-theme='dark'] .hit-item { background: #262626; border-color: #3a3a3a; box-shadow: none; }
+[data-theme='dark'] .hit-item .pair-title { color: #e5e5e5; }
+[data-theme='dark'] .hit-item .repeat-excerpt { background: #3a3018; color: #e0d3b0; }
+[data-theme='dark'] .hit-item .repeat-excerpt.bad { background: #3d2222; }
+[data-theme='dark'] .status-bar { background: #1c1c1c; border-top-color: #3a3a3a; }
+[data-theme='dark'] .markdown-body { color: #d4d4d4; }
+[data-theme='dark'] .markdown-body blockquote { border-left-color: #555; color: #a8a8a8; }
+[data-theme='dark'] .markdown-body code { background: #2c2c2c; }
+[data-theme='dark'] .markdown-body pre { background: #242424; }
+[data-theme='dark'] .markdown-body hr { border-top-color: #3a3a3a; }
+[data-theme='dark'] .markdown-body th, [data-theme='dark'] .markdown-body td { border-color: #3a3a3a; }
+[data-theme='dark'] .hit-mark { background: #6b5316; border-bottom-color: #d99a1a; }
+[data-theme='dark'] .hit-mark.bad { background: #5e2424; border-bottom-color: #ef4444; }
+/* CodeMirror 暗色 */
+[data-theme='dark'] .cm-editor { background: #1e1e1e; color: #d4d4d4; }
+[data-theme='dark'] .cm-editor .cm-content { caret-color: #d4d4d4; }
+[data-theme='dark'] .cm-editor .cm-cursor { border-left-color: #d4d4d4; }
+[data-theme='dark'] .cm-editor .cm-gutters { background: #1e1e1e; color: #7a7a7a; border-right: 1px solid #333; }
+[data-theme='dark'] .cm-editor .cm-activeLine { background: #24242455; }
+[data-theme='dark'] .cm-editor .cm-activeLineGutter { background: #24242455; }
+[data-theme='dark'] .cm-editor .cm-selectionBackground, [data-theme='dark'] .cm-editor ::selection { background: #264f78 !important; }
