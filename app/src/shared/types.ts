@@ -129,3 +129,20 @@ export interface WordStats {
   volume: number;
   book: number;
 }
+
+/** AI 形象提示词（system prompt），可在设置中增删改 */
+export interface Persona {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
+/** 应用设置（存于 data/settings.json，全局共享，不随单本书） */
+export interface AppSettings {
+  /** OpenAI 风格 API 地址（可含或不含 /v1） */
+  aiBaseUrl: string;
+  aiApiKey: string;
+  aiModel: string;
+  personas: Persona[];
+  activePersonaId: string;
+}

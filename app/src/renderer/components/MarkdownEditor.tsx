@@ -21,6 +21,10 @@ export interface MarkdownEditorHandle {
   setScrollRatio: (r: number) => void;
   undo: () => void;
   redo: () => void;
+  /** 当前选区文本（无选区返回空串） */
+  getSelection: () => string;
+  /** 用给定文本替换当前选区（无选区则插入光标处） */
+  replaceSelection: (text: string) => void;
 }
 
 const setRanges = StateEffect.define<SrcRange[]>();
@@ -69,10 +73,12 @@ interface Props {
   ranges: SrcRange[];
   onScroll?: (ratio: number) => void;
   scrollTo?: { from: number; token: number } | null;
+  /** 编辑器获得焦点（工具栏/AI 据此判断当前操作目标版块） */
+  onFocusPane?: () => void;
 }
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, ranges, onScroll, scrollTo }, ref,
+  { value, onChange, ranges, onScroll, scrollTo, onFocusPane }, ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -80,6 +86,8 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
   onChangeRef.current = onChange;
   const onScrollRef = useRef(onScroll);
   onScrollRef.current = onScroll;
+  const onFocusRef = useRef(onFocusPane);
+  onFocusRef.current = onFocusPane;
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -111,6 +119,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
               const max = el.scrollHeight - el.clientHeight;
               if (max > 0 && onScrollRef.current) onScrollRef.current(el.scrollTop / max);
             }
+          }),
+          EditorView.domEventHandlers({
+            focusin: () => { onFocusRef.current?.(); return false; },
           }),
           EditorView.lineWrapping,
           EditorView.theme({
@@ -203,6 +214,19 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       const view = viewRef.current;
       if (!view) return;
       redo(view);
+      view.focus();
+    },
+    getSelection() {
+      const view = viewRef.current;
+      if (!view) return '';
+      const { from, to } = view.state.selection.main;
+      return to > from ? view.state.sliceDoc(from, to) : '';
+    },
+    replaceSelection(text) {
+      const view = viewRef.current;
+      if (!view) return;
+      const { from, to } = view.state.selection.main;
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
       view.focus();
     },
   }));

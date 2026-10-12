@@ -131,6 +131,7 @@ export function openBook(bookId: string): BookSnapshot {
     volumes: volumeRepo.listVolumes(db.conn, bookId),
     chapters: chapterRepo.listChapterMeta(db.conn, bookId),
     params: checkRepo.getParams(db.conn),
+    outline: bookRepo.getMeta(db.conn, 'outline_md') ?? '',
   };
 }
 

@@ -5,10 +5,13 @@ import * as bookService from './services/bookService';
 import * as volumeRepo from './db/repositories/volumeRepo';
 import * as chapterRepo from './db/repositories/chapterRepo';
 import * as checkRepo from './db/repositories/checkRepo';
+import * as bookRepo from './db/repositories/bookRepo';
 import { runExport } from './services/exportService';
 import * as backupService from './services/backupService';
 import { searchBook } from './services/searchService';
 import { CheckerHost } from './checker/workerHost';
+import * as settingsService from './services/settingsService';
+import * as aiService from './services/aiService';
 
 function broadcast(channel: string, payload: unknown): void {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -50,6 +53,15 @@ export function registerIpc(): void {
   // ---- book ----
   handle('book:open', (req) => bookService.openBook(req.id));
   handle('book:stats', (req) => bookService.bookStats(req.id));
+  handle('book:saveOutline', (req) => {
+    const db = bookService.getDb(req.bookId);
+    bookRepo.setMeta(db.conn, 'outline_md', String(req.contentMd ?? ''));
+  });
+
+  // ---- 应用设置 / AI ----
+  handle('settings:get', () => settingsService.readSettings());
+  handle('settings:set', (req) => settingsService.writeSettings(req ?? {}));
+  handle('ai:chat', async (req) => ({ text: await aiService.chat(String(req.system ?? ''), String(req.prompt ?? '')) }));
 
   // ---- volume ----
   handle('volume:create', (req) => {

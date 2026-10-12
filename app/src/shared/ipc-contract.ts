@@ -1,6 +1,7 @@
 import type {
   LibraryEntry, Volume, ChapterMeta, Chapter, CheckHit, CheckParams,
   CheckProgress, SearchHit, BackupInfo, ExportRequest, ExportResult, ChapterFlagInfo,
+  AppSettings,
 } from './types';
 
 /** IPC 请求契约：channel -> { req, res }。preload 与 main 都据此校验白名单 */
@@ -12,6 +13,11 @@ export interface IpcInvokeMap {
 
   'book:open': { req: { id: string }; res: BookSnapshot };
   'book:stats': { req: { id: string }; res: { chapterCount: number; volumeCount: number; wordTotal: number } };
+  'book:saveOutline': { req: { bookId: string; contentMd: string }; res: void };
+
+  'settings:get': { req: void; res: AppSettings };
+  'settings:set': { req: Partial<AppSettings>; res: AppSettings };
+  'ai:chat': { req: { system: string; prompt: string }; res: { text: string } };
 
   'volume:create': { req: { bookId: string; title: string }; res: Volume };
   'volume:rename': { req: { bookId: string; volumeId: string; title: string }; res: void };
@@ -47,6 +53,8 @@ export interface BookSnapshot {
   volumes: Volume[];
   chapters: ChapterMeta[];
   params: CheckParams;
+  /** 大纲计划书（Markdown，per book，存 meta 表） */
+  outline: string;
 }
 
 /** main -> renderer 事件 */
@@ -59,7 +67,8 @@ export interface IpcEventMap {
 
 export const INVOKE_CHANNELS = [
   'library:list', 'library:create', 'library:delete', 'library:touch',
-  'book:open', 'book:stats',
+  'book:open', 'book:stats', 'book:saveOutline',
+  'settings:get', 'settings:set', 'ai:chat',
   'volume:create', 'volume:rename', 'volume:delete',
   'chapter:create', 'chapter:get', 'chapter:save', 'chapter:delete', 'chapter:move',
   'check:run', 'check:cancel', 'check:results', 'check:params', 'check:setParams', 'check:ignore',

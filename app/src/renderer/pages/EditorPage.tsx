@@ -13,7 +13,9 @@ import ReportPanel from '../components/ReportPanel';
 import SearchModal from '../components/SearchModal';
 import ExportModal from '../components/ExportModal';
 import BackupModal from '../components/BackupModal';
-import CheckSettingsModal from '../components/CheckSettingsModal';
+import SettingsModal from '../components/SettingsModal';
+import PlanPanel from '../components/PlanPanel';
+import AiFab from '../components/AiFab';
 import { useBookStore } from '../store/bookStore';
 import { useEditorStore } from '../store/editorStore';
 import { useCheckStore, mergeRanges } from '../store/checkStore';
@@ -41,6 +43,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [scrollTo, setScrollTo] = useState<{ from: number; token: number } | null>(null);
+  const [activePane, setActivePane] = useState<'plan' | 'chapter'>('chapter');
+  const [planContent, setPlanContent] = useState('');
+  const [planSaving, setPlanSaving] = useState(false);
 
   // ---------- 面板宽度（拖拽调整，localStorage 持久化） ----------
   const [sizes, setSizes] = useState<LayoutSizes>(() => loadLayout());
@@ -60,6 +65,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
     window.addEventListener('mouseup', up);
     document.body.style.userSelect = 'none';
   };
+  const resizePlan = startResize(e => {
+    setSizes(v => ({ ...v, plan: clamp(e.clientX - 3, 160, 420) }));
+  });
   const resizeOutline = startResize(e => {
     setSizes(v => ({ ...v, outline: clamp(e.clientX - 3, 160, 480) }));
   });
@@ -171,6 +179,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
   };
 
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
+  const planRef = useRef<MarkdownEditorHandle | null>(null);
   const previewRef = useRef<PreviewHandle | null>(null);
   const scrollLock = useRef(0);
   const savingRef = useRef(false);
@@ -226,9 +235,54 @@ export default function EditorPage({ bookId, onExit }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [doSave]);
 
+  // ---------- 大纲计划：按书加载 + 防抖保存（切书/卸载时冲刷） ----------
+  const planContentRef = useRef('');
+  const planDirtyRef = useRef(false);
+  const planTimerRef = useRef<number | null>(null);
+  const planLoadedRef = useRef('');
+  useEffect(() => {
+    if (!snapshot || planLoadedRef.current === bookId) return;
+    planLoadedRef.current = bookId;
+    planContentRef.current = snapshot.outline ?? '';
+    setPlanContent(snapshot.outline ?? '');
+    planDirtyRef.current = false;
+    if (planTimerRef.current) { window.clearTimeout(planTimerRef.current); planTimerRef.current = null; }
+    setPlanSaving(false);
+  }, [snapshot, bookId]);
+
+  const flushPlan = useCallback(async (): Promise<boolean> => {
+    if (!planDirtyRef.current) return false;
+    planDirtyRef.current = false;
+    try {
+      await fullApi.saveOutline(bookId, planContentRef.current);
+      return true;
+    } catch (e) {
+      planDirtyRef.current = true;
+      message.error(t('plan.saveFail') + (e instanceof Error ? e.message : String(e)));
+      return false;
+    }
+  }, [bookId]);
+
+  const onPlanChange = (v: string) => {
+    setPlanContent(v);
+    planContentRef.current = v;
+    planDirtyRef.current = true;
+    setPlanSaving(true);
+    if (planTimerRef.current) window.clearTimeout(planTimerRef.current);
+    planTimerRef.current = window.setTimeout(() => {
+      void flushPlan().finally(() => setPlanSaving(false));
+    }, 800);
+  };
+
+  // 切书/卸载：冲刷未保存的大纲
+  useEffect(() => () => {
+    if (planTimerRef.current) window.clearTimeout(planTimerRef.current);
+    void flushPlan();
+  }, [flushPlan]);
+
   // 窗口关闭前尽力保存
   useEffect(() => {
-    const handler = () => { void doSave(true); };
+    const handler = () => { void doSave(true); void flushPlan(); };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [doSave]);
@@ -316,9 +370,11 @@ export default function EditorPage({ bookId, onExit }: Props) {
   };
   const setReportVisibleSafe = (v: boolean) => check.setReportVisible(v);
 
-  // ---------- 工具栏 ----------
-  const wrapSel = (before: string, after: string) => editorRef.current?.wrapSelection(before, after);
-  const insertLine = (prefix: string) => editorRef.current?.insertText(prefix);
+  // ---------- 工具栏（统一作用于当前聚焦版块：大纲计划 / 章节正文） ----------
+  const activeEditor = (): MarkdownEditorHandle | null =>
+    activePane === 'plan' ? planRef.current : editorRef.current;
+  const wrapSel = (before: string, after: string) => activeEditor()?.wrapSelection(before, after);
+  const insertLine = (prefix: string) => activeEditor()?.insertText(prefix);
   const insertImage = async () => {
     try {
       const res = await fullApi.selectImage();
@@ -326,7 +382,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
       // file:/// + encodeURI：保留 / : 编码空格与中文
       const url = 'file:///' + encodeURI(res.filePath.replace(/\\/g, '/'));
       const base = (res.filePath.split(/[\\/]/).pop() || 'image').replace(/\.[^.]+$/, '');
-      editorRef.current?.insertText(`![${base}](${url})`);
+      activeEditor()?.insertText(`![${base}](${url})`);
     } catch {
       message.error(t('ed.imgFail'));
     }
@@ -386,21 +442,87 @@ export default function EditorPage({ bookId, onExit }: Props) {
         onExport={() => setExportOpen(true)}
         onBackup={() => setBackupOpen(true)}
         onSettings={() => setSettingsOpen(true)}
-        onBack={async () => { await doSave(true); onExit(); }}
+        onBack={async () => { await Promise.all([doSave(true), flushPlan()]); onExit(); }}
         checking={check.running}
         progress={check.progress}
         reportVisible={check.reportVisible}
       />
 
+      {/* 文字工具栏：置于所有版块顶部，统一管理各可编辑版块 */}
+      <div className="editor-toolbar toolbar-top">
+        <Tooltip title={t('ed.ttTitle')}><Button size="small" type="text" icon={<FontSizeOutlined />} onClick={() => insertLine('## ')} /></Tooltip>
+        <Tooltip title={t('ed.ttBold')}><Button size="small" type="text" icon={<BoldOutlined />} onClick={() => wrapSel('**', '**')} /></Tooltip>
+        <Tooltip title={t('ed.ttItalic')}><Button size="small" type="text" icon={<ItalicOutlined />} onClick={() => wrapSel('*', '*')} /></Tooltip>
+        <span className="sep" />
+        <Tooltip title={t('ed.ttQuote')}><Button size="small" type="text" icon={<MutedOutlined />} onClick={() => insertLine('> ')} /></Tooltip>
+        <Tooltip title={t('ed.ttOl')}><Button size="small" type="text" icon={<OrderedListOutlined />} onClick={() => insertLine('1. ')} /></Tooltip>
+        <Tooltip title={t('ed.ttUl')}><Button size="small" type="text" icon={<UnorderedListOutlined />} onClick={() => insertLine('- ')} /></Tooltip>
+        <span className="sep" />
+        <Tooltip title={t('ed.ttLink')}><Button size="small" type="text" icon={<LinkOutlined />} onClick={() => wrapSel('[', '](url)')} /></Tooltip>
+        <Tooltip title={t('ed.ttImage')}><Button size="small" type="text" icon={<PictureOutlined />} onClick={() => void insertImage()} /></Tooltip>
+        <Tooltip title={t('ed.ttHr')}><Button size="small" type="text" icon={<MinusCircleOutlined />} onClick={() => insertLine('\n---\n')} /></Tooltip>
+        <span className="sep" />
+        <Tooltip title={t('ed.ttUndo')}><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => activeEditor()?.undo()} /></Tooltip>
+        <Tooltip title={t('ed.ttRedo')}><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => activeEditor()?.redo()} /></Tooltip>
+        <Tooltip title={t('ed.ttStepBack')}><Button size="small" type="text" icon={<ArrowLeftOutlined />} onClick={() => void stepBack()} /></Tooltip>
+        {splitMode === 'split' && (
+          <Tooltip title={t('ed.ttDir')}>
+            <Button
+              size="small"
+              type="text"
+              icon={<SwapOutlined />}
+              onClick={() => setSizes(v => ({ ...v, splitDir: v.splitDir === 'h' ? 'v' : 'h' }))}
+            />
+          </Tooltip>
+        )}
+        <span style={{ flex: 1 }} />
+        {chapter && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {chapter.title} · {t('ed.chars', { n: chapter.wordCount })}
+            {chapter.flag && (
+              <Tooltip title={t('out.chapterDupTip')}>
+                <span style={{ marginLeft: 8, cursor: 'pointer', color: chapter.flag.level === 'bad' ? '#dc2626' : '#d97706' }}>
+                  {chapter.flag.level === 'bad' ? t('ed.flagDup') : t('ed.flagSuspect')}
+                </span>
+              </Tooltip>
+            )}
+          </Typography.Text>
+        )}
+      </div>
+
       <div
         className="editor-layout"
         style={{
+          '--plan-w': sizes.plan + 'px',
           '--outline-w': sizes.outline + 'px',
           '--report-w': sizes.report + 'px',
           '--outline-h': sizes.outlineH + '%',
           '--report-h': sizes.reportH + '%',
         } as React.CSSProperties}
       >
+        <PlanPanel
+          ref={planRef}
+          content={planContent}
+          onChange={onPlanChange}
+          onFocusPane={() => setActivePane('plan')}
+          saving={planSaving}
+        />
+        <div
+          className="panel-resizer"
+          title={t('ed.rzPlan')}
+          role="separator"
+          aria-label={t('ed.rzPlanAria')}
+          tabIndex={0}
+          onMouseDown={resizePlan}
+          onDoubleClick={() => setSizes(v => ({ ...v, plan: 240 }))}
+          onKeyDown={e => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
+              setSizes(v => ({ ...v, plan: clamp(v.plan + d, 160, 420) }));
+            } else if (e.key === 'Home') setSizes(v => ({ ...v, plan: 240 }));
+          }}
+        />
         <OutlinePanel
           bookId={bookId}
           volumes={volumes}
@@ -427,47 +549,6 @@ export default function EditorPage({ bookId, onExit }: Props) {
         />
 
         <div className="center-pane">
-          <div className="editor-toolbar">
-            <Tooltip title={t('ed.ttTitle')}><Button size="small" type="text" icon={<FontSizeOutlined />} onClick={() => insertLine('## ')} /></Tooltip>
-            <Tooltip title={t('ed.ttBold')}><Button size="small" type="text" icon={<BoldOutlined />} onClick={() => wrapSel('**', '**')} /></Tooltip>
-            <Tooltip title={t('ed.ttItalic')}><Button size="small" type="text" icon={<ItalicOutlined />} onClick={() => wrapSel('*', '*')} /></Tooltip>
-            <span className="sep" />
-            <Tooltip title={t('ed.ttQuote')}><Button size="small" type="text" icon={<MutedOutlined />} onClick={() => insertLine('> ')} /></Tooltip>
-            <Tooltip title={t('ed.ttOl')}><Button size="small" type="text" icon={<OrderedListOutlined />} onClick={() => insertLine('1. ')} /></Tooltip>
-            <Tooltip title={t('ed.ttUl')}><Button size="small" type="text" icon={<UnorderedListOutlined />} onClick={() => insertLine('- ')} /></Tooltip>
-            <span className="sep" />
-            <Tooltip title={t('ed.ttLink')}><Button size="small" type="text" icon={<LinkOutlined />} onClick={() => wrapSel('[', '](url)')} /></Tooltip>
-            <Tooltip title={t('ed.ttImage')}><Button size="small" type="text" icon={<PictureOutlined />} onClick={() => void insertImage()} /></Tooltip>
-            <Tooltip title={t('ed.ttHr')}><Button size="small" type="text" icon={<MinusCircleOutlined />} onClick={() => insertLine('\n---\n')} /></Tooltip>
-            <span className="sep" />
-            <Tooltip title={t('ed.ttUndo')}><Button size="small" type="text" icon={<UndoOutlined />} onClick={() => editorRef.current?.undo()} /></Tooltip>
-            <Tooltip title={t('ed.ttRedo')}><Button size="small" type="text" icon={<RedoOutlined />} onClick={() => editorRef.current?.redo()} /></Tooltip>
-            <Tooltip title={t('ed.ttStepBack')}><Button size="small" type="text" icon={<ArrowLeftOutlined />} onClick={() => void stepBack()} /></Tooltip>
-            {splitMode === 'split' && (
-              <Tooltip title={t('ed.ttDir')}>
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<SwapOutlined />}
-                  onClick={() => setSizes(v => ({ ...v, splitDir: v.splitDir === 'h' ? 'v' : 'h' }))}
-                />
-              </Tooltip>
-            )}
-            <span style={{ flex: 1 }} />
-            {chapter && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {chapter.title} · {t('ed.chars', { n: chapter.wordCount })}
-                {chapter.flag && (
-                  <Tooltip title={t('out.chapterDupTip')}>
-                    <span style={{ marginLeft: 8, cursor: 'pointer', color: chapter.flag.level === 'bad' ? '#dc2626' : '#d97706' }}>
-                      {chapter.flag.level === 'bad' ? t('ed.flagDup') : t('ed.flagSuspect')}
-                    </span>
-                  </Tooltip>
-                )}
-              </Typography.Text>
-            )}
-          </div>
-
           <div className={'editor-body' + (splitMode === 'split' && sizes.splitDir === 'v' ? ' split-v' : '')} ref={bodyRef}>
             {showEditor && (
               <div
@@ -481,6 +562,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
                   ranges={srcRanges}
                   onScroll={editorScroll}
                   scrollTo={scrollTo}
+                  onFocusPane={() => setActivePane('chapter')}
                 />
               </div>
             )}
@@ -600,11 +682,17 @@ export default function EditorPage({ bookId, onExit }: Props) {
         onChanged={() => { void refreshSnapshot(); void ed.loadChapter(bookId, ed.chapterId ?? ''); }}
       />
 
-      <CheckSettingsModal
+      <SettingsModal
         open={settingsOpen}
         params={check.params}
         onClose={() => setSettingsOpen(false)}
-        onSave={async params => { await check.saveParams(bookId, params); message.success(t('ed.paramsSaved')); }}
+        onSaveParams={async params => { await check.saveParams(bookId, params); message.success(t('ed.paramsSaved')); }}
+      />
+
+      <AiFab
+        getSelection={() => activeEditor()?.getSelection() ?? ''}
+        onReplace={text => activeEditor()?.replaceSelection(text)}
+        onInsert={text => activeEditor()?.insertText(text)}
       />
     </div>
   );
@@ -612,12 +700,12 @@ export default function EditorPage({ bookId, onExit }: Props) {
 
 // ---------- 布局尺寸：读写 localStorage ----------
 interface LayoutSizes {
-  outline: number; report: number; split: number;
+  plan: number; outline: number; report: number; split: number;
   outlineH: number; reportH: number; // 面板高度（占编辑区的百分比，25~100）
   splitDir: 'h' | 'v';               // 分屏方向：左右 / 上下
 }
 const LAYOUT_KEY = 'novelEditor.layout.v1';
-const DEFAULT_LAYOUT: LayoutSizes = { outline: 260, report: 360, split: 50, outlineH: 100, reportH: 100, splitDir: 'h' };
+const DEFAULT_LAYOUT: LayoutSizes = { plan: 240, outline: 260, report: 360, split: 50, outlineH: 100, reportH: 100, splitDir: 'h' };
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 function loadLayout(): LayoutSizes {
   try {
@@ -625,6 +713,7 @@ function loadLayout(): LayoutSizes {
     if (raw) {
       const o = JSON.parse(raw) as Partial<LayoutSizes>;
       return {
+        plan: typeof o.plan === 'number' ? clamp(o.plan, 160, 420) : DEFAULT_LAYOUT.plan,
         outline: typeof o.outline === 'number' ? clamp(o.outline, 160, 480) : DEFAULT_LAYOUT.outline,
         report: typeof o.report === 'number' ? clamp(o.report, 300, 660) : DEFAULT_LAYOUT.report,
         split: typeof o.split === 'number' ? clamp(o.split, 15, 85) : DEFAULT_LAYOUT.split,

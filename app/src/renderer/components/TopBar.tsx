@@ -1,15 +1,11 @@
 import React from 'react';
-import { App, Button, Popover, Segmented, Space, Tag, Tooltip, Progress } from 'antd';
+import { Button, Segmented, Space, Tag, Tooltip, Progress } from 'antd';
 import {
   ArrowLeftOutlined, SaveOutlined, SearchOutlined, FileSearchOutlined,
   DownloadOutlined, DatabaseOutlined, SettingOutlined, PartitionOutlined,
-  BgColorsOutlined, PictureOutlined,
 } from '@ant-design/icons';
 import type { CheckProgress } from '../../shared/types';
-import { useThemeStore } from '../store/themeStore';
-import { useBgStore, READER_COLORS } from '../store/bgStore';
-import { api } from '../api';
-import { useT, useLocale } from '../i18n';
+import { useT } from '../i18n';
 
 export type SplitMode = 'split' | 'edit' | 'preview';
 
@@ -32,45 +28,9 @@ interface Props {
   reportVisible: boolean;
 }
 
+/** 顶栏：分屏模式 + 文档操作。背景/语言/主题与查重参数已统一收纳进「设置」弹窗。 */
 export default function TopBar(p: Props) {
-  const themeMode = useThemeStore(s => s.theme);
-  const toggleTheme = useThemeStore(s => s.toggle);
   const t = useT();
-  const locale = useLocale(s => s.locale);
-  const setLocale = useLocale(s => s.setLocale);
-  const bg = useBgStore(s => s.bg);
-  const setBg = useBgStore(s => s.setBg);
-  const { message } = App.useApp();
-  const pickBgImage = () => {
-    void (async () => {
-      try {
-        const r = await api.selectImage();
-        if (r.canceled || !r.filePath) return;
-        setBg({ type: 'image', value: 'file:///' + encodeURI(r.filePath.replace(/\\/g, '/')) });
-      } catch {
-        message.error(t('ed.imgFail'));
-      }
-    })();
-  };
-  const bgPop = (
-    <div className="bg-pop">
-      {READER_COLORS.map(c => (
-        <button
-          key={c.key}
-          type="button"
-          className={'bg-swatch' + (bg.type === 'color' && bg.value === c.color ? ' active' : '')}
-          style={{ background: c.color }}
-          title={t(c.key)}
-          onClick={() => setBg({ type: 'color', value: c.color })}
-        />
-      ))}
-      <Button size="small" onClick={() => setBg({ type: 'none' })}>{t('top.bgDefault')}</Button>
-      <Button size="small" icon={<PictureOutlined />} onClick={pickBgImage}>{t('top.bgCustom')}</Button>
-      {bg.type !== 'none' && (
-        <Button size="small" onClick={() => setBg({ type: 'none' })}>{t('top.bgReset')}</Button>
-      )}
-    </div>
-  );
   return (
     <div className="top-bar">
       <Space size={12}>
@@ -102,19 +62,10 @@ export default function TopBar(p: Props) {
         <Button size="small" type="primary" icon={<FileSearchOutlined />} loading={p.checking} onClick={p.onRunCheck}>{t('top.check')}</Button>
         <Button size="small" icon={<DownloadOutlined />} onClick={p.onExport}>{t('top.export')}</Button>
         <Button size="small" icon={<DatabaseOutlined />} onClick={p.onBackup}>{t('top.backup')}</Button>
-        <Button size="small" icon={<SettingOutlined />} onClick={p.onSettings}>{t('top.settings')}</Button>
+        <Tooltip title={t('top.settings')}>
+          <Button size="small" icon={<SettingOutlined />} onClick={p.onSettings}>{t('top.settings')}</Button>
+        </Tooltip>
         <Button size="small" onClick={p.onToggleReport} type={p.reportVisible ? 'default' : 'dashed'}>{t('top.report')}</Button>
-        <Tooltip title={t('top.bgTip')}>
-          <Popover content={bgPop} trigger="click" placement="bottomRight">
-            <Button size="small" icon={<BgColorsOutlined />} />
-          </Popover>
-        </Tooltip>
-        <Tooltip title={locale === 'zh' ? t('top.lang') : t('top.langBack')}>
-          <Button size="small" onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}>{t('lib.lang')}</Button>
-        </Tooltip>
-        <Tooltip title={themeMode === 'dark' ? t('top.themeLight') : t('top.themeDark')}>
-          <Button size="small" onClick={toggleTheme}>{themeMode === 'dark' ? '☀️' : '🌙'}</Button>
-        </Tooltip>
       </Space>
     </div>
   );

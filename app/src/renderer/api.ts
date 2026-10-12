@@ -4,7 +4,7 @@ import type {
 import type {
   LibraryEntry, Volume, ChapterMeta, Chapter, CheckHit, CheckParams, CheckProgress,
   ChapterFlagInfo, SearchHit, ExportRequest, ExportResult, BackupInfo,
-  ExportFormat, ExportScope,
+  ExportFormat, ExportScope, AppSettings,
 } from '../shared/types';
 
 interface NovelEditorApi {
@@ -31,6 +31,13 @@ export const api = {
   touchBook: (id: string) => call('library:touch', { id }),
   openBook: (id: string): Promise<BookSnapshot> => call('book:open', { id }),
   bookStats: (id: string) => call('book:stats', { id }),
+  saveOutline: (bookId: string, contentMd: string) =>
+    call('book:saveOutline', { bookId, contentMd }),
+
+  getSettings: (): Promise<AppSettings> => call('settings:get'),
+  setSettings: (patch: Partial<AppSettings>): Promise<AppSettings> => call('settings:set', patch),
+  aiChat: (system: string, prompt: string): Promise<{ text: string }> =>
+    call('ai:chat', { system, prompt }),
 
   createVolume: (bookId: string, title: string) => call('volume:create', { bookId, title }),
   renameVolume: (bookId: string, volumeId: string, title: string) =>
