@@ -18,3 +18,7 @@ data-*/
 Thumbs.db
 *.log
 artifacts/*.png
+
+# 误生成的环境变量残留目录
+%SystemDrive%/
+app/%SystemDrive%/

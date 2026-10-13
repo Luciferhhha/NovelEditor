@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Tree, Button, Dropdown, Modal, Input, Popconfirm, Empty, Tag, Tooltip } from 'antd';
-import { PlusOutlined, MoreOutlined, BookOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, MoreOutlined, BookOutlined, FileTextOutlined, MinusOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { Volume, ChapterMeta, ChapterFlagInfo } from '../api';
 import { api } from '../api';
@@ -14,6 +14,8 @@ interface Props {
   currentChapterId: string | null;
   onSelectChapter: (chapterId: string) => void;
   onChanged: () => void;
+  /** 收起整个章节板块（由父级隐藏并提供窄条恢复入口） */
+  onCollapse?: () => void;
 }
 
 function flagTag(flag: ChapterFlagInfo | null, t: TFunc): React.ReactNode {
@@ -23,7 +25,7 @@ function flagTag(flag: ChapterFlagInfo | null, t: TFunc): React.ReactNode {
   return <Tooltip title={tip}><Tag color="orange" className="chapter-flag">{t('out.tagSuspect')}</Tag></Tooltip>;
 }
 
-export default function OutlinePanel({ bookId, volumes, chapters, currentChapterId, onSelectChapter, onChanged }: Props) {
+export default function OutlinePanel({ bookId, volumes, chapters, currentChapterId, onSelectChapter, onChanged, onCollapse }: Props) {
   const t = useT();
   const [modal, setModal] = useState<null | { kind: 'volume' | 'chapter'; volumeId?: string; editingVolumeId?: string; editingChapterId?: string; initial?: string }>(null);
   const [text, setText] = useState('');
@@ -153,6 +155,10 @@ export default function OutlinePanel({ bookId, volumes, chapters, currentChapter
         <span>
           <Button size="small" type="text" icon={<PlusOutlined />} title={t('out.addVolume')}
             onClick={() => { setText(t('out.newVolume')); setModal({ kind: 'volume' }); }} />
+          {onCollapse && (
+            <Button size="small" type="text" icon={<MinusOutlined />} title={t('out.collapse')}
+              aria-label={t('out.collapse')} onClick={onCollapse} />
+          )}
         </span>
       </div>
       <div className="outline-tree">

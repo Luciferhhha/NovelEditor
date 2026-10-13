@@ -80,6 +80,8 @@ export default function AiFab({ getSelection, onReplace, onInsert }: Props) {
         placement="right"
         width={440}
         title={t('ai.title')}
+        mask={false}
+        styles={{ wrapper: { boxShadow: '-8px 0 28px rgba(0,0,0,.18)', borderLeft: '1px solid rgba(0,0,0,.08)' } }}
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('ai.hint')}</Typography.Text>

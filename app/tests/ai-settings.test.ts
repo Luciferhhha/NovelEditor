@@ -101,3 +101,43 @@ describe('aiService chatUrlCandidates', () => {
     expect(b.messages[1].content).toContain('润色');
   });
 });
+
+describe('aiService 模型列表拉取（#4 一键拉取）', () => {
+  it('modelsUrlCandidates: 空地址返回空', () => {
+    expect(aiService.modelsUrlCandidates('')).toEqual([]);
+  });
+
+  it('modelsUrlCandidates: 完整 chat/completions 地址先去掉尾部，落 /v1 规则出单候选', () => {
+    expect(aiService.modelsUrlCandidates('https://host/v1/chat/completions'))
+      .toEqual(['https://host/v1/models']);
+    expect(aiService.modelsUrlCandidates('https://host/chat/completions'))
+      .toEqual(['https://host/models', 'https://host/v1/models']);
+  });
+
+  it('modelsUrlCandidates: /v1 结尾只出一个 /v1/models', () => {
+    expect(aiService.modelsUrlCandidates('https://api.deepseek.com/v1'))
+      .toEqual(['https://api.deepseek.com/v1/models']);
+  });
+
+  it('modelsUrlCandidates: 裸域名给两个候选', () => {
+    expect(aiService.modelsUrlCandidates('https://api.openai.com')).toEqual([
+      'https://api.openai.com/models',
+      'https://api.openai.com/v1/models',
+    ]);
+  });
+
+  it('extractModels: OpenAI 风格 data[].id', () => {
+    expect(aiService.extractModels({ data: [{ id: 'a' }, { id: 'b' }] })).toEqual(['a', 'b']);
+  });
+
+  it('extractModels: Ollama 风格 models[].name 与字符串项', () => {
+    expect(aiService.extractModels({ models: [{ name: 'llama3' }, 'qwen'] }))
+      .toEqual(['llama3', 'qwen']);
+  });
+
+  it('extractModels: 去重且异常返回空数组', () => {
+    expect(aiService.extractModels({ data: [{ id: 'x' }, { id: 'x' }] })).toEqual(['x']);
+    expect(aiService.extractModels(null)).toEqual([]);
+    expect(aiService.extractModels({})).toEqual([]);
+  });
+});

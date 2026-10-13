@@ -18,6 +18,7 @@ export interface IpcInvokeMap {
   'settings:get': { req: void; res: AppSettings };
   'settings:set': { req: Partial<AppSettings>; res: AppSettings };
   'ai:chat': { req: { system: string; prompt: string }; res: { text: string } };
+  'ai:listModels': { req: { baseUrl: string; apiKey: string }; res: { models: string[] } };
 
   'volume:create': { req: { bookId: string; title: string }; res: Volume };
   'volume:rename': { req: { bookId: string; volumeId: string; title: string }; res: void };
@@ -68,7 +69,7 @@ export interface IpcEventMap {
 export const INVOKE_CHANNELS = [
   'library:list', 'library:create', 'library:delete', 'library:touch',
   'book:open', 'book:stats', 'book:saveOutline',
-  'settings:get', 'settings:set', 'ai:chat',
+  'settings:get', 'settings:set', 'ai:chat', 'ai:listModels',
   'volume:create', 'volume:rename', 'volume:delete',
   'chapter:create', 'chapter:get', 'chapter:save', 'chapter:delete', 'chapter:move',
   'check:run', 'check:cancel', 'check:results', 'check:params', 'check:setParams', 'check:ignore',

@@ -62,6 +62,9 @@ export function registerIpc(): void {
   handle('settings:get', () => settingsService.readSettings());
   handle('settings:set', (req) => settingsService.writeSettings(req ?? {}));
   handle('ai:chat', async (req) => ({ text: await aiService.chat(String(req.system ?? ''), String(req.prompt ?? '')) }));
+  handle('ai:listModels', async (req) => ({
+    models: await aiService.listModels(String(req.baseUrl ?? ''), String(req.apiKey ?? '')),
+  }));
 
   // ---- volume ----
   handle('volume:create', (req) => {

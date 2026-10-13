@@ -16,6 +16,29 @@ export function chatUrlCandidates(baseUrl: string): string[] {
   return a === b ? [a] : [a, b];
 }
 
+/**
+ * 拉取模型列表的候选地址（OpenAI 风格 GET /models）。
+ * 与 chatUrlCandidates 同规则：完整 /chat/completions 地址先去掉尾部，/vN 结尾直接拼，
+ * 裸域名则依次尝试 /models 与 /v1/models（404 回退）。
+ */
+export function modelsUrlCandidates(baseUrl: string): string[] {
+  const u = String(baseUrl ?? '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
+  if (!u) return [];
+  if (/\/v\d+$/.test(u)) return [u + '/models'];
+  return [u + '/models', u + '/v1/models'];
+}
+
+/** 解析 OpenAI 风格 {data:[{id}]} / Ollama 风格 {models:[{name}]} 等返回 */
+export function extractModels(json: any): string[] {
+  const out: string[] = [];
+  const push = (v: unknown) => { if (typeof v === 'string' && v) out.push(v); };
+  if (Array.isArray(json?.data)) for (const d of json.data) push(d?.id ?? d?.name);
+  if (out.length === 0 && Array.isArray(json?.models)) {
+    for (const m of json.models) push(typeof m === 'string' ? m : (m?.id ?? m?.name));
+  }
+  return [...new Set(out)];
+}
+
 export interface ChatRequest {
   model: string;
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
@@ -88,6 +111,34 @@ export async function chat(system: string, prompt: string): Promise<string> {
         // 网络/超时等
         if (i === urls.length - 1) throw new Error('AI_NETWORK: ' + msg);
       }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('AI_NETWORK');
+}
+
+/** 拉取可用模型列表（OpenAI 风格 GET /models），错误码与 chat 一致 */
+export async function listModels(baseUrl: string, apiKey: string): Promise<string[]> {
+  const urls = modelsUrlCandidates(baseUrl);
+  if (urls.length === 0 || !apiKey) throw new Error('AI_NOT_CONFIGURED');
+  let lastErr: unknown = null;
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30_000);
+      let res: Response;
+      try {
+        res = await fetch(urls[i], { headers: { Authorization: 'Bearer ' + apiKey }, signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (res.ok) return extractModels(await res.json());
+      if (res.status !== 404 || i === urls.length - 1) throw new Error('AI_HTTP_' + res.status);
+      lastErr = new Error('AI_HTTP_404');
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith('AI_HTTP_') && !msg.endsWith('404')) throw e;
+      if (!msg.startsWith('AI_') && i === urls.length - 1) throw new Error('AI_NETWORK: ' + msg);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error('AI_NETWORK');

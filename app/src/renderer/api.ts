@@ -38,6 +38,8 @@ export const api = {
   setSettings: (patch: Partial<AppSettings>): Promise<AppSettings> => call('settings:set', patch),
   aiChat: (system: string, prompt: string): Promise<{ text: string }> =>
     call('ai:chat', { system, prompt }),
+  listModels: (baseUrl: string, apiKey: string): Promise<{ models: string[] }> =>
+    call('ai:listModels', { baseUrl, apiKey }),
 
   createVolume: (bookId: string, title: string) => call('volume:create', { bookId, title }),
   renameVolume: (bookId: string, volumeId: string, title: string) =>

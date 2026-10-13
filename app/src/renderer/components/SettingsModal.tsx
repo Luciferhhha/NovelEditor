@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { App, Button, Form, Input, InputNumber, Modal, Segmented, Space, Tabs, Typography } from 'antd';
+import { App, AutoComplete, Button, Form, Input, InputNumber, Modal, Segmented, Space, Tabs, Typography } from 'antd';
 import { PictureOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { AppSettings, CheckParams, Persona } from '../../shared/types';
 import { DEFAULT_CHECK_PARAMS } from '../../shared/types';
@@ -35,11 +35,33 @@ export default function SettingsModal({ open, onClose, params, onSaveParams, ini
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [checkForm] = Form.useForm();
   const [busy, setBusy] = useState(false);
+  const [modelOptions, setModelOptions] = useState<{ value: string }[]>([]);
+  const [fetching, setFetching] = useState(false);
+
+  /** 傻瓜式一键拉取：用当前填写的 API 地址 + 密钥请求 /models，成功后可直接下拉选择 */
+  const fetchModels = async () => {
+    if (!settings) return;
+    const baseUrl = settings.aiBaseUrl.trim();
+    const apiKey = settings.aiApiKey.trim();
+    if (!baseUrl || !apiKey) { message.warning(t('set.needApi')); return; }
+    setFetching(true);
+    try {
+      const r = await api.listModels(baseUrl, apiKey);
+      setModelOptions(r.models.map(m => ({ value: m })));
+      if (r.models.length === 0) message.info(t('set.fetchNone'));
+      else message.success(t('set.fetched', { n: r.models.length }));
+    } catch (e) {
+      message.error(t('set.fetchFail') + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setFetching(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
     setTab(initialTab ?? 'ai');
     setSettings(null);
+    setModelOptions([]);
     checkForm.setFieldsValue(params ?? DEFAULT_CHECK_PARAMS);
     void api.getSettings().then(setSettings).catch(e => message.error(String(e)));
   }, [open]);
@@ -105,11 +127,19 @@ export default function SettingsModal({ open, onClose, params, onSaveParams, ini
           />
         </Form.Item>
         <Form.Item label={t('set.aiModel')}>
-          <Input
-            value={settings.aiModel}
-            placeholder={t('set.aiModelPh')}
-            onChange={e => patchSettings({ aiModel: e.target.value })}
-          />
+          <Space.Compact style={{ width: '100%' }}>
+            <AutoComplete
+              style={{ width: 'calc(100% - 118px)' }}
+              value={settings.aiModel}
+              placeholder={t('set.aiModelPh')}
+              options={modelOptions}
+              onChange={v => patchSettings({ aiModel: String(v) })}
+              allowClear
+            />
+            <Button loading={fetching} onClick={() => void fetchModels()}>
+              {t('set.fetchModels')}
+            </Button>
+          </Space.Compact>
         </Form.Item>
       </Form>
 

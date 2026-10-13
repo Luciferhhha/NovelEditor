@@ -3,7 +3,7 @@ import { Button, App, Spin, Tooltip, Typography } from 'antd';
 import {
   BoldOutlined, ItalicOutlined, FontSizeOutlined, OrderedListOutlined, UnorderedListOutlined,
   MutedOutlined, LinkOutlined, PictureOutlined, MinusCircleOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined,
-  SwapOutlined,
+  SwapOutlined, MinusOutlined,
 } from '@ant-design/icons';
 import TopBar, { type SplitMode } from '../components/TopBar';
 import OutlinePanel from '../components/OutlinePanel';
@@ -69,7 +69,11 @@ export default function EditorPage({ bookId, onExit }: Props) {
     setSizes(v => ({ ...v, plan: clamp(e.clientX - 3, 160, 420) }));
   });
   const resizeOutline = startResize(e => {
-    setSizes(v => ({ ...v, outline: clamp(e.clientX - 3, 160, 480) }));
+    // 大纲左缘 = 大纲计划可见时 plan+分隔条(6px)，隐藏时只剩恢复窄条(STRIP_W)
+    setSizes(v => ({
+      ...v,
+      outline: clamp(e.clientX - (v.planHidden ? STRIP_W : v.plan + 6) - 3, 160, 480),
+    }));
   });
   const resizeReport = startResize(e => {
     setSizes(v => ({ ...v, report: clamp(document.documentElement.clientWidth - e.clientX - 3, 300, 660) }));
@@ -121,10 +125,16 @@ export default function EditorPage({ bookId, onExit }: Props) {
     const parent = grip.offsetParent as HTMLElement | null;
     if (!parent) return;
     const parentH = parent.offsetHeight;
-    const startW = side === 'outline'
-      ? grip.offsetLeft + 16
-      : parent.offsetWidth - grip.offsetLeft + 16;
-    const startH = grip.offsetTop + 16;
+    // 直接量真实面板：offsetLeft 含左侧大纲计划宽度，原公式会算错
+    const panelEl = parent.querySelector(
+      side === 'outline' ? '.outline-panel' : '.report-panel',
+    ) as HTMLElement | null;
+    const startW = panelEl
+      ? panelEl.offsetWidth
+      : side === 'outline'
+        ? grip.offsetLeft + 16
+        : parent.offsetWidth - grip.offsetLeft + 16;
+    const startH = panelEl ? panelEl.offsetHeight : grip.offsetTop + 16;
     if (parentH <= 0 || startW <= 0 || startH <= 0) return;
     const ratio = startW / startH; // 等比锁定的宽高比
     const x0 = e.clientX;
@@ -424,8 +434,9 @@ export default function EditorPage({ bookId, onExit }: Props) {
     return <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}><Spin size="large" /></div>;
   }
 
-  const showEditor = splitMode !== 'preview';
-  const showPreview = splitMode !== 'edit';
+  const showPreview = splitMode !== 'edit' && !sizes.previewHidden;
+  // 预览被收起时即便处于“预览模式”也回退为编辑器，避免编辑区全空
+  const showEditor = splitMode !== 'preview' || !showPreview;
 
   return (
     <div className="app-shell">
@@ -493,60 +504,80 @@ export default function EditorPage({ bookId, onExit }: Props) {
       <div
         className="editor-layout"
         style={{
-          '--plan-w': sizes.plan + 'px',
+          '--plan-w': (sizes.planHidden ? STRIP_W : sizes.plan) + 'px',
           '--outline-w': sizes.outline + 'px',
           '--report-w': sizes.report + 'px',
           '--outline-h': sizes.outlineH + '%',
           '--report-h': sizes.reportH + '%',
         } as React.CSSProperties}
       >
-        <PlanPanel
-          ref={planRef}
-          content={planContent}
-          onChange={onPlanChange}
-          onFocusPane={() => setActivePane('plan')}
-          saving={planSaving}
-        />
-        <div
-          className="panel-resizer"
-          title={t('ed.rzPlan')}
-          role="separator"
-          aria-label={t('ed.rzPlanAria')}
-          tabIndex={0}
-          onMouseDown={resizePlan}
-          onDoubleClick={() => setSizes(v => ({ ...v, plan: 240 }))}
-          onKeyDown={e => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-              e.preventDefault();
-              const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
-              setSizes(v => ({ ...v, plan: clamp(v.plan + d, 160, 420) }));
-            } else if (e.key === 'Home') setSizes(v => ({ ...v, plan: 240 }));
-          }}
-        />
-        <OutlinePanel
-          bookId={bookId}
-          volumes={volumes}
-          chapters={chapters}
-          currentChapterId={currentChapterId}
-          onSelectChapter={id => void selectChapter(id)}
-          onChanged={() => void refreshSnapshot()}
-        />
-        <div
-          className="panel-resizer"
-          title={t('ed.rzOutline')}
-          role="separator"
-          aria-label={t('ed.rzOutlineAria')}
-          tabIndex={0}
-          onMouseDown={resizeOutline}
-          onDoubleClick={() => setSizes(v => ({ ...v, outline: 260 }))}
-          onKeyDown={e => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-              e.preventDefault();
-              const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
-              setSizes(v => ({ ...v, outline: clamp(v.outline + d, 160, 480) }));
-            } else if (e.key === 'Home') setSizes(v => ({ ...v, outline: 260 }));
-          }}
-        />
+        {sizes.planHidden ? (
+          <StripButton
+            label={t('ed.restorePlan')}
+            onClick={() => setSizes(v => ({ ...v, planHidden: false }))}
+          />
+        ) : (
+          <>
+            <PlanPanel
+              ref={planRef}
+              content={planContent}
+              onChange={onPlanChange}
+              onFocusPane={() => setActivePane('plan')}
+              saving={planSaving}
+              onCollapse={() => setSizes(v => ({ ...v, planHidden: true }))}
+            />
+            <div
+              className="panel-resizer"
+              title={t('ed.rzPlan')}
+              role="separator"
+              aria-label={t('ed.rzPlanAria')}
+              tabIndex={0}
+              onMouseDown={resizePlan}
+              onDoubleClick={() => setSizes(v => ({ ...v, plan: 240 }))}
+              onKeyDown={e => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
+                  setSizes(v => ({ ...v, plan: clamp(v.plan + d, 160, 420) }));
+                } else if (e.key === 'Home') setSizes(v => ({ ...v, plan: 240 }));
+              }}
+            />
+          </>
+        )}
+        {sizes.outlineHidden ? (
+          <StripButton
+            label={t('ed.restoreOutline')}
+            onClick={() => setSizes(v => ({ ...v, outlineHidden: false }))}
+          />
+        ) : (
+          <>
+            <OutlinePanel
+              bookId={bookId}
+              volumes={volumes}
+              chapters={chapters}
+              currentChapterId={currentChapterId}
+              onSelectChapter={id => void selectChapter(id)}
+              onChanged={() => void refreshSnapshot()}
+              onCollapse={() => setSizes(v => ({ ...v, outlineHidden: true }))}
+            />
+            <div
+              className="panel-resizer"
+              title={t('ed.rzOutline')}
+              role="separator"
+              aria-label={t('ed.rzOutlineAria')}
+              tabIndex={0}
+              onMouseDown={resizeOutline}
+              onDoubleClick={() => setSizes(v => ({ ...v, outline: 260 }))}
+              onKeyDown={e => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 48 : 16);
+                  setSizes(v => ({ ...v, outline: clamp(v.outline + d, 160, 480) }));
+                } else if (e.key === 'Home') setSizes(v => ({ ...v, outline: 260 }));
+              }}
+            />
+          </>
+        )}
 
         <div className="center-pane">
           <div className={'editor-body' + (splitMode === 'split' && sizes.splitDir === 'v' ? ' split-v' : '')} ref={bodyRef}>
@@ -566,7 +597,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
                 />
               </div>
             )}
-            {splitMode === 'split' && (
+            {splitMode === 'split' && showPreview && showEditor && (
               <div
                 className="split-divider"
                 title={sizes.splitDir === 'v' ? t('ed.rzSplitV') : t('ed.rzSplit')}
@@ -576,12 +607,29 @@ export default function EditorPage({ bookId, onExit }: Props) {
             )}
             {showPreview && (
               <div
+                className="preview-host"
                 style={splitMode === 'split'
                   ? { flex: `${100 - sizes.split} 1 0%`, display: 'flex', minHeight: 0 }
                   : { flex: 'none', width: '100%', display: 'flex', minHeight: 0 }}
               >
                 <PreviewPane ref={previewRef} content={ed.content} onScroll={previewScroll} />
+                <Button
+                  className="pane-collapse"
+                  size="small"
+                  type="text"
+                  title={t('ed.collapsePreview')}
+                  aria-label={t('ed.collapsePreview')}
+                  icon={<MinusOutlined />}
+                  onClick={() => setSizes(v => ({ ...v, previewHidden: true }))}
+                />
               </div>
+            )}
+            {sizes.previewHidden && (
+              <StripButton
+                vertical
+                label={t('ed.restorePreview')}
+                onClick={() => setSizes(v => ({ ...v, previewHidden: false }))}
+              />
             )}
           </div>
 
@@ -631,7 +679,8 @@ export default function EditorPage({ bookId, onExit }: Props) {
             onToggleIgnore={hit => void toggleIgnore(hit)}
           />
         )}
-        {/* 对角拖柄：拖动同时调整面板宽与高（Shift 等比，双击复位） */}
+        {/* 对角拖柄：拖动同时调整面板宽与高（Shift 等比，双击复位）；面板收起时隐藏 */}
+        {!sizes.outlineHidden && (
         <div
           className="corner-grip outline-grip"
           title={t('ed.rzCorner')}
@@ -642,6 +691,7 @@ export default function EditorPage({ bookId, onExit }: Props) {
           onDoubleClick={() => setSizes(v => ({ ...v, outline: 260, outlineH: 100 }))}
           onKeyDown={cornerKey('outline')}
         />
+        )}
         {check.reportVisible && (
           <div
             className="corner-grip report-grip"
@@ -698,14 +748,38 @@ export default function EditorPage({ bookId, onExit }: Props) {
   );
 }
 
+/** 收起板块后留出的窄条：点击恢复对应板块（竖排文字标注板块名） */
+function StripButton({ label, onClick, vertical }: { label: string; onClick: () => void; vertical?: boolean }) {
+  return (
+    <div
+      className={'panel-strip' + (vertical ? ' strip-right' : '')}
+      role="button"
+      tabIndex={0}
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+      }}
+    >
+      <span className="strip-label">{label}</span>
+    </div>
+  );
+}
+
 // ---------- 布局尺寸：读写 localStorage ----------
 interface LayoutSizes {
   plan: number; outline: number; report: number; split: number;
   outlineH: number; reportH: number; // 面板高度（占编辑区的百分比，25~100）
   splitDir: 'h' | 'v';               // 分屏方向：左右 / 上下
+  planHidden: boolean;               // 大纲计划板块收起
+  outlineHidden: boolean;            // 章节板块收起
+  previewHidden: boolean;            // 预览板块收起
 }
 const LAYOUT_KEY = 'novelEditor.layout.v1';
-const DEFAULT_LAYOUT: LayoutSizes = { plan: 240, outline: 260, report: 360, split: 50, outlineH: 100, reportH: 100, splitDir: 'h' };
+const DEFAULT_LAYOUT: LayoutSizes = { plan: 240, outline: 260, report: 360, split: 50, outlineH: 100, reportH: 100, splitDir: 'h', planHidden: false, outlineHidden: false, previewHidden: false };
+/** 收起后留出的恢复窄条宽度（px） */
+const STRIP_W = 28;
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 function loadLayout(): LayoutSizes {
   try {
@@ -720,6 +794,9 @@ function loadLayout(): LayoutSizes {
         outlineH: typeof o.outlineH === 'number' ? clamp(o.outlineH, 25, 100) : DEFAULT_LAYOUT.outlineH,
         reportH: typeof o.reportH === 'number' ? clamp(o.reportH, 25, 100) : DEFAULT_LAYOUT.reportH,
         splitDir: o.splitDir === 'v' ? 'v' : 'h',
+        planHidden: o.planHidden === true,
+        outlineHidden: o.outlineHidden === true,
+        previewHidden: o.previewHidden === true,
       };
     }
   } catch { /* 忽略损坏数据 */ }
